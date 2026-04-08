@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+httpx
+feedparser
+pydantic
+pydantic-settings
+python-dotenv
+openai
+google-genai
+qdrant-client
