@@ -1,5 +1,6 @@
 import random
 import time
+import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,26 +50,38 @@ def _security_headers() -> dict:
 
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
-    if not settings.enable_metrics:
-        return await call_next(request)
-
+    request_id = str(uuid.uuid4())[:8]
     start = time.perf_counter()
     path = request.url.path
     method = request.method
-    metrics.inc("http.requests_total")
-    metrics.inc(f"http.requests.{method}.{path}")
+    status_code = 500
+
+    if settings.enable_metrics:
+        metrics.inc("http.requests_total")
+        metrics.inc(f"http.requests.{method}.{path}")
 
     try:
         response = await call_next(request)
-        metrics.inc(f"http.responses.{response.status_code}")
+        status_code = response.status_code
+        if settings.enable_metrics:
+            metrics.inc(f"http.responses.{status_code}")
     except Exception as exc:
-        metrics.inc("http.errors_total")
-        logger.exception("request_failed method=%s path=%s error=%s", method, path, exc)
+        if settings.enable_metrics:
+            metrics.inc("http.errors_total")
+        logger.exception(
+            "request_failed request_id=%s method=%s path=%s error=%s",
+            request_id, method, path, exc,
+        )
         raise
     finally:
-        elapsed = time.perf_counter() - start
-        metrics.observe("http.request_latency", elapsed)
-        metrics.observe(f"http.request_latency.{method}.{path}", elapsed)
+        latency_ms = round((time.perf_counter() - start) * 1000, 1)
+        if settings.enable_metrics:
+            metrics.observe("http.request_latency", latency_ms / 1000)
+            metrics.observe(f"http.request_latency.{method}.{path}", latency_ms / 1000)
+        logger.debug(
+            "request_complete request_id=%s method=%s path=%s status=%s latency_ms=%s",
+            request_id, method, path, status_code, latency_ms,
+        )
 
     return response
 

@@ -4,6 +4,7 @@ httpx
 feedparser
 pydantic[email]
 pydantic-settings
+python-json-logger
 python-dotenv
 openai
 google-genai

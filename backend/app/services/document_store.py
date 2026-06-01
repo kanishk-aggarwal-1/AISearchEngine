@@ -309,6 +309,7 @@ class DocumentStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ingestion_runs_status ON ingestion_runs (status, started_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_verification_user ON auth_verification_tokens (user_id, expires_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_password_reset_user ON auth_password_reset_tokens (user_id, expires_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions (expires_at)")
             self._migrate_auth_tables_if_needed(conn)
             self._migrate_source_status_table_if_needed(conn)
 
