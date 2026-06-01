@@ -1,7 +1,7 @@
 """Shared FastAPI dependencies: auth extraction and enforcement."""
 from fastapi import HTTPException, Request
 
-from backend.app.container import store
+from backend.app.container import logger, store
 from backend.app.models import AuthUser
 
 
@@ -23,7 +23,9 @@ def current_user(request: Request) -> AuthUser:
 def current_admin(request: Request) -> AuthUser:
     user = current_user(request)
     if not user.is_admin:
+        logger.warning("audit admin_access_denied user_id=%s path=%s", user.user_id, request.url.path)
         raise HTTPException(status_code=403, detail="Admin access required")
+    logger.info("audit admin_access user_id=%s path=%s", user.user_id, request.url.path)
     return user
 
 

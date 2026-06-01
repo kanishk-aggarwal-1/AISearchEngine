@@ -23,7 +23,7 @@ class Settings(BaseSettings):
 
     embedding_model: str = "text-embedding-3-small"
     explanation_model: str = "gpt-4.1-mini"
-    strict_real_embeddings: bool = False
+    strict_real_embeddings: bool = True
     email_preview_tokens: bool = False
     smtp_host: str = ""
     smtp_port: int = 587

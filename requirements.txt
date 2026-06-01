@@ -2,7 +2,7 @@ fastapi
 uvicorn
 httpx
 feedparser
-pydantic
+pydantic[email]
 pydantic-settings
 python-dotenv
 openai

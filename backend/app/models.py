@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 Category = Literal["tech", "research", "sports", "general"]
@@ -128,14 +128,14 @@ class BookmarkItem(BaseModel):
 
 
 class AuthRegisterRequest(BaseModel):
-    email: str
-    password: str = Field(min_length=8)
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=128)
     display_name: str = Field(min_length=2, max_length=80)
 
 
 class AuthLoginRequest(BaseModel):
-    email: str
-    password: str = Field(min_length=8)
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
 
 
 class AuthUser(BaseModel):
@@ -158,12 +158,12 @@ class AuthMessage(BaseModel):
 
 
 class PasswordResetRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 
 class PasswordResetConfirmRequest(BaseModel):
     token: str
-    new_password: str = Field(min_length=8)
+    new_password: str = Field(min_length=10, max_length=128)
 
 
 class TokenConfirmRequest(BaseModel):
@@ -235,7 +235,7 @@ class SourceToggleRequest(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    query: str = Field(min_length=3)
+    query: str = Field(min_length=1, max_length=1000)
     top_k: int = Field(default=5, ge=1, le=20)
     categories: List[Category] = Field(default_factory=lambda: ["tech", "research", "general"], min_length=1)
     user_id: str = "default"

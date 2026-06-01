@@ -12,7 +12,8 @@ from backend.app.container import (
 )
 from backend.app.routers import admin, auth, browse, health, research, search, sports, users
 
-RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
+# Fallback in-process buckets used only when Redis is unavailable (single-worker dev mode)
+_RATE_LIMIT_BUCKETS: dict[str, list[float]] = {}
 ALLOWED_ORIGINS = [
     settings.frontend_origin,
     *[item.strip() for item in settings.extra_frontend_origins.split(",") if item.strip()],
@@ -72,27 +73,41 @@ async def metrics_middleware(request: Request, call_next):
     return response
 
 
+async def _is_rate_limited(client_ip: str) -> bool:
+    """
+    Redis-backed rate limiter (works across multiple workers).
+    Falls back to in-process sliding window when Redis is unavailable.
+    """
+    if cache.using_redis:
+        count = await cache.incr(f"rl:{client_ip}", ttl_seconds=60)
+        return count > settings.rate_limit_per_minute
+
+    # In-process fallback — single-worker only
+    now = time.time()
+    window_start = now - 60
+    bucket = [s for s in _RATE_LIMIT_BUCKETS.get(client_ip, []) if s >= window_start]
+    if random.random() < 0.01:
+        stale = [ip for ip, stamps in _RATE_LIMIT_BUCKETS.items() if not stamps or max(stamps) < window_start]
+        for ip in stale:
+            del _RATE_LIMIT_BUCKETS[ip]
+    if len(bucket) >= settings.rate_limit_per_minute:
+        return True
+    bucket.append(now)
+    _RATE_LIMIT_BUCKETS[client_ip] = bucket
+    return False
+
+
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     client_host = request.client.host if request.client else "unknown"
-    now = time.time()
-    window_start = now - 60
-    bucket = [s for s in RATE_LIMIT_BUCKETS.get(client_host, []) if s >= window_start]
 
-    if random.random() < 0.01:
-        stale = [ip for ip, stamps in RATE_LIMIT_BUCKETS.items() if not stamps or max(stamps) < window_start]
-        for ip in stale:
-            del RATE_LIMIT_BUCKETS[ip]
-
-    if len(bucket) >= settings.rate_limit_per_minute:
+    if await _is_rate_limited(client_host):
         metrics.inc("http.rate_limited")
         return JSONResponse(
             {"detail": "Rate limit exceeded. Please retry shortly."},
             status_code=429,
             headers=_security_headers(),
         )
-    bucket.append(now)
-    RATE_LIMIT_BUCKETS[client_host] = bucket
 
     response = await call_next(request)
     for header, value in _security_headers().items():
@@ -102,6 +117,12 @@ async def security_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 async def startup_event() -> None:
+    if settings.strict_real_embeddings and not embedding_service.real_embeddings_enabled:
+        raise RuntimeError(
+            "strict_real_embeddings=True but no embedding provider is configured. "
+            "Set GEMINI_API_KEY or OPENAI_API_KEY in your .env, "
+            "or set STRICT_REAL_EMBEDDINGS=false to allow hash-based fallback."
+        )
     await scheduler.start()
     logger.info(
         "startup_complete vector_enabled=%s real_embeddings=%s strict_real_embeddings=%s cache_backend=%s redis_enabled=%s",
