@@ -57,6 +57,20 @@ class CacheService:
     async def put_query_cache(self, query_key: str, payload: dict[str, Any], ttl_minutes: int) -> None:
         await self.set_json("query_cache", query_key, payload, ttl_minutes)
 
+    async def incr(self, key: str, ttl_seconds: int = 60) -> int:
+        """Atomically increment a counter and set TTL on first write. Returns new count."""
+        if not self.using_redis:
+            return 0
+        full_key = f"{self.prefix}:{key}"
+        try:
+            count = await self.client.incr(full_key)
+            if count == 1:
+                await self.client.expire(full_key, ttl_seconds)
+            return count
+        except Exception as exc:
+            self.logger.warning("redis_incr_failed key=%s error=%s", key, exc)
+            return 0
+
     async def ping(self) -> bool:
         if not self.using_redis:
             return False

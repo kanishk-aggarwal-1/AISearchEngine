@@ -10,6 +10,7 @@ from typing import List
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from backend.app.config import settings
+from backend.app.services.logging_service import get_logger
 from backend.app.models import (
     AlertDeliverySettings,
     AlertRule,
@@ -32,6 +33,7 @@ class DocumentStore:
     def __init__(self, db_path: str):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.logger = get_logger("signalscope.store")
         self._init_db()
 
     def _connect(self) -> sqlite3.Connection:
@@ -659,6 +661,7 @@ class DocumentStore:
         with self._connection() as conn:
             row = conn.execute("SELECT * FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
             if not row or not self._verify_password(password, row["password_hash"]):
+                self.logger.warning("audit login_failed email=%s", normalized_email)
                 return None
             token = secrets.token_urlsafe(32)
             now = datetime.now(timezone.utc)
@@ -671,6 +674,7 @@ class DocumentStore:
                 """,
                 (token, row["user_id"], now_iso, now_iso, expires_iso),
             )
+        self.logger.info("audit login_success user_id=%s", row["user_id"])
         return AuthSessionResponse(
             token=token,
             user=AuthUser(
@@ -753,6 +757,7 @@ class DocumentStore:
                 return None
             conn.execute("UPDATE auth_verification_tokens SET used_at = ? WHERE token = ?", (now_iso, token.strip()))
             conn.execute("UPDATE auth_users SET email_verified = 1 WHERE user_id = ?", (row["user_id"],))
+        self.logger.info("audit email_verified user_id=%s", row["user_id"])
         return AuthUser(
             user_id=row["user_id"],
             email=row["email"],
@@ -769,6 +774,7 @@ class DocumentStore:
         with self._connection() as conn:
             row = conn.execute("SELECT user_id FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
             if not row:
+                self.logger.warning("audit password_reset_unknown_email email=%s", normalized_email)
                 return None
             token = secrets.token_urlsafe(24)
             conn.execute("DELETE FROM auth_password_reset_tokens WHERE user_id = ? AND used_at IS NULL", (row["user_id"],))
@@ -779,6 +785,7 @@ class DocumentStore:
                 """,
                 (token, row["user_id"], now.isoformat(), expires_at.isoformat()),
             )
+        self.logger.info("audit password_reset_issued user_id=%s", row["user_id"])
         return token, expires_at.isoformat()
 
     def reset_password(self, token: str, new_password: str) -> AuthMessage | None:
@@ -799,6 +806,7 @@ class DocumentStore:
             conn.execute("UPDATE auth_password_reset_tokens SET used_at = ? WHERE token = ?", (now_iso, token.strip()))
             conn.execute("UPDATE auth_users SET password_hash = ? WHERE user_id = ?", (self._hash_password(new_password), row["user_id"]))
             conn.execute("DELETE FROM auth_sessions WHERE user_id = ?", (row["user_id"],))
+        self.logger.info("audit password_reset_completed user_id=%s", row["user_id"])
         return AuthMessage(message="Password updated. Please sign in again.")
 
     def put_query_cache(self, query_key: str, payload: dict) -> None:
