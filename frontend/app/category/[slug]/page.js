@@ -12,7 +12,13 @@ const labels = {
 
 export default function CategoryPage({ params }) {
   const { slug } = params;
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000", []);
+  const apiUrl = useMemo(() => {
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+    if (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+      return "/api";
+    }
+    return "http://127.0.0.1:8000";
+  }, []);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -54,7 +60,11 @@ export default function CategoryPage({ params }) {
           <article className="query-card">
             <h2>Trending Topics</h2>
             <div className="chips">
-              {(data.trending_topics || []).map((topic) => <span key={topic} className="chip active static-chip">{topic}</span>)}
+              {(data.trending_topics || []).map((topic) => (
+                <Link key={topic} href={`/topic/${encodeURIComponent(topic)}`} className="chip active static-chip">
+                  {topic}
+                </Link>
+              ))}
             </div>
             <h3>Top Sources</h3>
             <ul>

@@ -1,7 +1,9 @@
-﻿import asyncio
+import asyncio
+import time
 from typing import Dict, List
 
 from backend.app.models import Category, SourceDoc
+from backend.app.services.document_store import DocumentStore
 from backend.app.sources.arxiv import ArxivSourceProvider
 from backend.app.sources.base import SourceProvider
 from backend.app.sources.newsapi import NewsApiSourceProvider
@@ -10,7 +12,10 @@ from backend.app.sources.sports import SportsDbSourceProvider
 
 
 class SourceRegistry:
-    def __init__(self) -> None:
+    MAX_ATTEMPTS = 3
+
+    def __init__(self, store: DocumentStore | None = None) -> None:
+        self.store = store
         self.providers: Dict[Category, List[SourceProvider]] = {
             "tech": [
                 RssSourceProvider("https://techcrunch.com/feed/", "TechCrunch", "tech"),
@@ -39,7 +44,10 @@ class SourceRegistry:
         tasks = []
         for category in categories:
             for provider in self.providers.get(category, []):
-                tasks.append(provider.search(query=query, limit=per_source_limit))
+                source_name = getattr(provider, "source_name", provider.__class__.__name__)
+                if self.store and not self.store.source_enabled(source_name):
+                    continue
+                tasks.append(self._provider_search(provider, category, query, per_source_limit))
 
         if not tasks:
             return []
@@ -59,3 +67,35 @@ class SourceRegistry:
                 unique[key] = doc
 
         return list(unique.values())
+
+    async def _provider_search(self, provider: SourceProvider, category: Category, query: str, limit: int) -> List[SourceDoc]:
+        source_name = getattr(provider, "source_name", provider.__class__.__name__)
+        last_error = ""
+        for attempt in range(1, self.MAX_ATTEMPTS + 1):
+            started = time.perf_counter()
+            try:
+                docs = await provider.search(query=query, limit=limit)
+                if self.store:
+                    self.store.record_source_result(
+                        source_name,
+                        category,
+                        len(docs),
+                        error="",
+                        latency_ms=(time.perf_counter() - started) * 1000.0,
+                    )
+                return docs
+            except Exception as exc:
+                last_error = f"attempt {attempt}/{self.MAX_ATTEMPTS}: {exc}"
+                if attempt < self.MAX_ATTEMPTS:
+                    await asyncio.sleep(0.35 * attempt)
+                    continue
+                if self.store:
+                    self.store.record_source_result(
+                        source_name,
+                        category,
+                        0,
+                        error=last_error,
+                        latency_ms=(time.perf_counter() - started) * 1000.0,
+                    )
+                return []
+        return []

@@ -29,6 +29,36 @@ class VectorIndexService:
             except Exception as exc:
                 self.logger.warning("vector_init_failed error=%s", exc)
 
+    async def health(self) -> dict:
+        if settings.vector_backend.lower() != "qdrant":
+            return {"backend": settings.vector_backend, "enabled": False, "status": "disabled"}
+
+        if not settings.qdrant_url:
+            return {"backend": "qdrant", "enabled": False, "status": "unconfigured"}
+
+        if not self.enabled or not self.client:
+            return {"backend": "qdrant", "enabled": False, "status": "unavailable"}
+
+        def _check() -> dict:
+            collection_exists = False
+            try:
+                collection_exists = self.client.collection_exists(settings.qdrant_collection)
+            except Exception:
+                collection_exists = False
+            return {
+                "backend": "qdrant",
+                "enabled": True,
+                "status": "ok",
+                "collection": settings.qdrant_collection,
+                "collection_exists": bool(collection_exists),
+            }
+
+        try:
+            return await asyncio.to_thread(_check)
+        except Exception as exc:
+            self.logger.warning("vector_health_failed error=%s", exc)
+            return {"backend": "qdrant", "enabled": True, "status": "degraded", "error": str(exc)}
+
     async def ensure_collection(self, vector_size: int) -> None:
         if not self.enabled or not self.client or not qmodels:
             return
