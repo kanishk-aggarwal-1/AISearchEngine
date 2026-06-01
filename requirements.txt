@@ -8,3 +8,7 @@ python-dotenv
 openai
 google-genai
 qdrant-client
+redis[hiredis]
+psycopg[binary]
+SQLAlchemy
+alembic

@@ -1,0 +1,75 @@
+import json
+from typing import Any
+
+from backend.app.config import settings
+from backend.app.services.logging_service import get_logger
+
+try:
+    import redis.asyncio as redis
+except Exception:  # pragma: no cover
+    redis = None
+
+
+class CacheService:
+    def __init__(self) -> None:
+        self.logger = get_logger("signalscope.cache")
+        self.backend = settings.cache_backend.lower().strip() or "sqlite"
+        self.prefix = settings.redis_prefix.strip() or "signalscope"
+        self.client = None
+        self.enabled = False
+
+        if self.backend == "redis" and redis and settings.redis_url:
+            try:
+                self.client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+                self.enabled = True
+            except Exception as exc:
+                self.logger.warning("redis_cache_init_failed error=%s", exc)
+                self.client = None
+                self.enabled = False
+
+    @property
+    def using_redis(self) -> bool:
+        return bool(self.enabled and self.client)
+
+    def _key(self, namespace: str, cache_key: str) -> str:
+        return f"{self.prefix}:{namespace}:{cache_key}"
+
+    async def get(self, namespace: str, cache_key: str) -> str | None:
+        if not self.using_redis:
+            return None
+        try:
+            return await self.client.get(self._key(namespace, cache_key))
+        except Exception as exc:
+            self.logger.warning("redis_cache_get_failed namespace=%s error=%s", namespace, exc)
+            return None
+
+    async def set_json(self, namespace: str, cache_key: str, payload: dict[str, Any], ttl_minutes: int) -> None:
+        if not self.using_redis:
+            return
+        try:
+            await self.client.set(self._key(namespace, cache_key), json.dumps(payload), ex=max(ttl_minutes * 60, 60))
+        except Exception as exc:
+            self.logger.warning("redis_cache_put_failed namespace=%s error=%s", namespace, exc)
+
+    async def get_query_cache(self, query_key: str) -> str | None:
+        return await self.get("query_cache", query_key)
+
+    async def put_query_cache(self, query_key: str, payload: dict[str, Any], ttl_minutes: int) -> None:
+        await self.set_json("query_cache", query_key, payload, ttl_minutes)
+
+    async def ping(self) -> bool:
+        if not self.using_redis:
+            return False
+        try:
+            return bool(await self.client.ping())
+        except Exception as exc:
+            self.logger.warning("redis_cache_ping_failed error=%s", exc)
+            return False
+
+    async def close(self) -> None:
+        if not self.using_redis:
+            return
+        try:
+            await self.client.aclose()
+        except Exception as exc:
+            self.logger.warning("redis_cache_close_failed error=%s", exc)

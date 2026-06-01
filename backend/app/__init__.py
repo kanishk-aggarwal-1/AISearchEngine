@@ -1,3 +1,3 @@
-﻿from backend.app.main import app
+"""SignalScope backend application package."""
 
-__all__ = ["app"]
+__all__ = []

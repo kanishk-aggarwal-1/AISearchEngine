@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:smoke": "next build"
   },
   "dependencies": {
     "next": "15.4.6",
@@ -13,3 +14,4 @@
     "react-dom": "19.1.1"
   }
 }
+

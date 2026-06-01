@@ -1,13 +1,15 @@
-﻿import asyncio
+import asyncio
 from contextlib import suppress
 
+from backend.app.services.alert_service import AlertService
 from backend.app.services.ingestion import IngestionService
 from backend.app.services.logging_service import get_logger
 
 
 class SchedulerService:
-    def __init__(self, ingestion: IngestionService, interval_minutes: int):
+    def __init__(self, ingestion: IngestionService, interval_minutes: int, alerts: AlertService | None = None):
         self.ingestion = ingestion
+        self.alerts = alerts
         self.interval_seconds = max(5, interval_minutes * 60)
         self._task: asyncio.Task | None = None
         self.logger = get_logger("signalscope.scheduler")
@@ -31,6 +33,9 @@ class SchedulerService:
             try:
                 inserted = await self.ingestion.ingest_seed_topics()
                 self.logger.info("scheduler_ingest_completed inserted=%s", inserted)
+                if self.alerts:
+                    delivered = await self.alerts.process_alerts()
+                    self.logger.info("scheduler_alerts_completed delivered=%s", delivered)
             except Exception as exc:
                 self.logger.warning("scheduler_ingest_failed error=%s", exc)
             await asyncio.sleep(self.interval_seconds)

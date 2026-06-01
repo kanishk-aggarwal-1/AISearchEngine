@@ -73,7 +73,7 @@ class ExplainerService:
                 context = self._context_block(docs[:8])
                 prompt = (
                     "Answer follow-up questions strictly from the provided context. "
-                    "Admit uncertainty when context is missing. "
+                    "Admit uncertainty when context is missing. Cite supporting sources inline like [1] when making factual claims. "
                     "Return strict JSON with keys answer and key_points (max 4).\n\n"
                     f"Original query: {query}\n"
                     f"Mode: {mode}\n"
@@ -93,7 +93,7 @@ class ExplainerService:
         if self.openai_client:
             try:
                 context = self._context_block(docs[:8])
-                system = "Answer follow-up questions strictly from provided context. Admit uncertainty when missing."
+                system = "Answer follow-up questions strictly from provided context. Admit uncertainty when missing and cite supporting sources inline like [1]."
                 user = (
                     f"Original query: {query}\n"
                     f"Mode: {mode}\n"
@@ -123,6 +123,7 @@ class ExplainerService:
         context = self._context_block(docs[:10])
         prompt = (
             "You are an AI research and news assistant. Explain retrieved information clearly and truthfully. "
+            "Only make claims supported by the retrieved context. Cite every material claim inline with source numbers like [1] or [2]. "
             "Do not fabricate facts. Use uncertainty language when evidence is mixed. Return strict JSON with keys: "
             "explanation (string), key_takeaways (array max 6), why_it_matters (string), what_changed_last_week (string).\n\n"
             f"User query: {query}\n"
@@ -138,7 +139,7 @@ class ExplainerService:
         context = self._context_block(docs[:10])
         system = (
             "You are an AI research and news assistant. Explain retrieved information clearly and truthfully. "
-            "Do not fabricate facts. Use uncertainty language when evidence is mixed."
+            "Only make claims supported by the retrieved context, cite every material claim inline like [1], and use uncertainty language when evidence is mixed."
         )
         user = (
             f"User query: {query}\n"
@@ -167,15 +168,15 @@ class ExplainerService:
         top = docs[:4]
         source_names = ", ".join(sorted({doc.source for doc in top}))
         if mode == "tldr":
-            base = f"Top signals for '{query}' come from {source_names}. Cross-source overlap suggests this trend is active."
+            base = f"Top signals for '{query}' come from {source_names} [1]. Cross-source overlap suggests this trend is active [1][2]."
         elif mode == "deep":
-            base = f"For '{query}', ranked evidence converges across {source_names}. Scores combine semantic similarity, lexical overlap, recency, source credibility, and user personalization."
+            base = f"For '{query}', ranked evidence converges across {source_names} [1][2]. Scores combine semantic similarity, lexical overlap, recency, source credibility, and chunk-level support."
         elif mode == "analyst":
-            base = f"For '{query}', the current evidence stack indicates directional momentum across {source_names}. Confidence should be discounted where contradiction signals appear."
+            base = f"For '{query}', the current evidence stack indicates directional momentum across {source_names} [1][2]. Confidence should be discounted where contradiction signals appear."
         else:
-            base = f"For '{query}', the strongest results come from {source_names}. Multiple sources report similar themes, so we can treat this as a credible snapshot."
+            base = f"For '{query}', the strongest results come from {source_names} [1]. Multiple sources report similar themes, so we can treat this as a credible snapshot [1][2]."
 
-        takeaways = [f"{doc.title} ({doc.source}, {doc.freshness_label})" for doc in top]
+        takeaways = [f"[{idx}] {doc.title} ({doc.source}, {doc.freshness_label})" for idx, doc in enumerate(top, start=1)]
         if contradictions:
             takeaways.append(f"Caution: {contradictions[0]}")
 
@@ -188,7 +189,7 @@ class ExplainerService:
         elif output_format == "timeline":
             explanation = self._timeline_style(top)
         elif output_format == "fact_check":
-            explanation = f"Verified claims are strongest in {source_names}. Uncertainty remains where sources do not fully agree."
+            explanation = f"Verified claims are strongest in {source_names} [1][2]. Uncertainty remains where sources do not fully agree."
         else:
             explanation = base
 
@@ -233,7 +234,7 @@ class ExplainerService:
             lines.append(
                 f"[{idx}] {doc.title}\n"
                 f"Source: {doc.source} | Category: {doc.category} | Freshness: {doc.freshness_label}{authors}\n"
-                f"Citation: {doc.citation_snippet}\n"
+                f"Support: {doc.citation_snippet[:280]}\n"
                 f"Summary: {doc.summary[:500]}"
             )
         return "\n\n".join(lines)

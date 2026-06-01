@@ -1,0 +1,469 @@
+[
+  {
+    "id": "tech_agents",
+    "query": "latest breakthroughs in AI agents",
+    "categories": ["tech", "research", "general"],
+    "documents": [
+      {
+        "title": "Autonomous coding agents get better at long-running tasks",
+        "summary": "New AI agents can plan multi-step software work, use tools, and recover from failures in long-running coding sessions.",
+        "url": "https://example.com/tech/agents-coding",
+        "source": "TechCrunch",
+        "category": "tech",
+        "published_at": "2026-05-11T10:00:00+00:00",
+        "credibility_score": 0.78,
+        "citation_snippet": "New AI agents can plan multi-step software work."
+      },
+      {
+        "title": "Research benchmark shows agentic systems improving tool use",
+        "summary": "A new benchmark paper finds modern agent systems are improving at tool calling, memory, and task recovery.",
+        "url": "https://example.com/research/agent-benchmark",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-10T09:00:00+00:00",
+        "credibility_score": 0.84,
+        "citation_snippet": "A new benchmark paper finds modern agent systems are improving at tool calling."
+      },
+      {
+        "title": "Open-source AI assistant adds browser and terminal workflows",
+        "summary": "An open-source assistant now combines browser, terminal, and retrieval tools into one workflow.",
+        "url": "https://example.com/tech/assistant-tools",
+        "source": "The Verge",
+        "category": "tech",
+        "published_at": "2026-05-09T08:00:00+00:00",
+        "credibility_score": 0.74,
+        "citation_snippet": "An open-source assistant now combines browser, terminal, and retrieval tools."
+      },
+      {
+        "title": "Quantum startup reveals new photonic packaging process",
+        "summary": "A quantum hardware startup said its new packaging process could improve photonic chip yields.",
+        "url": "https://example.com/tech/quantum-packaging",
+        "source": "Wired",
+        "category": "tech",
+        "published_at": "2026-05-08T12:00:00+00:00",
+        "credibility_score": 0.66,
+        "citation_snippet": "A quantum hardware startup said its new packaging process could improve yields."
+      },
+      {
+        "title": "What product managers need to know about AI copilots",
+        "summary": "A general explainer on how teams are adopting copilots inside product organizations.",
+        "url": "https://example.com/general/copilot-managers",
+        "source": "NPR World",
+        "category": "general",
+        "published_at": "2026-05-07T15:00:00+00:00",
+        "credibility_score": 0.63,
+        "citation_snippet": "Teams are adopting copilots inside product organizations."
+      },
+      {
+        "title": "NBA playoff bracket tightens after overtime finish",
+        "summary": "The latest NBA playoff game ended in overtime and changed the Western Conference bracket.",
+        "url": "https://example.com/sports/nba-overtime",
+        "source": "ESPN",
+        "category": "sports",
+        "published_at": "2026-05-11T03:00:00+00:00",
+        "credibility_score": 0.72,
+        "citation_snippet": "The latest NBA playoff game ended in overtime."
+      }
+    ],
+    "relevance": {
+      "https://example.com/tech/agents-coding": 3,
+      "https://example.com/research/agent-benchmark": 3,
+      "https://example.com/tech/assistant-tools": 2
+    }
+  },
+  {
+    "id": "research_reasoning",
+    "query": "new reasoning model research papers",
+    "categories": ["research", "tech"],
+    "documents": [
+      {
+        "title": "Reasoning model scales with verifier-guided search",
+        "summary": "Researchers describe a verifier-guided search method that improves reasoning accuracy on math and coding tasks.",
+        "url": "https://example.com/research/verifier-search",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-11T11:00:00+00:00",
+        "credibility_score": 0.88,
+        "citation_snippet": "A verifier-guided search method improves reasoning accuracy."
+      },
+      {
+        "title": "Industry lab previews a new reasoning model stack",
+        "summary": "A major AI lab previewed a reasoning model stack focused on tool use and step-by-step planning.",
+        "url": "https://example.com/tech/reasoning-stack",
+        "source": "The Information",
+        "category": "tech",
+        "published_at": "2026-05-10T10:30:00+00:00",
+        "credibility_score": 0.79,
+        "citation_snippet": "A major AI lab previewed a reasoning model stack focused on tool use."
+      },
+      {
+        "title": "Benchmark for test-time reasoning strategies",
+        "summary": "A new benchmark evaluates test-time reasoning strategies across planning and verification tasks.",
+        "url": "https://example.com/research/test-time-reasoning",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-09T18:00:00+00:00",
+        "credibility_score": 0.86,
+        "citation_snippet": "A new benchmark evaluates test-time reasoning strategies."
+      },
+      {
+        "title": "Cloud provider expands GPU clusters for enterprise inference",
+        "summary": "A cloud provider expanded GPU clusters to support enterprise inference demand.",
+        "url": "https://example.com/tech/gpu-clusters",
+        "source": "TechCrunch",
+        "category": "tech",
+        "published_at": "2026-05-08T19:30:00+00:00",
+        "credibility_score": 0.73,
+        "citation_snippet": "A cloud provider expanded GPU clusters."
+      },
+      {
+        "title": "Premier League club changes manager after losing streak",
+        "summary": "A football club changed its manager after a losing streak.",
+        "url": "https://example.com/sports/epl-manager",
+        "source": "BBC Sport",
+        "category": "sports",
+        "published_at": "2026-05-10T13:00:00+00:00",
+        "credibility_score": 0.7,
+        "citation_snippet": "A football club changed its manager."
+      }
+    ],
+    "relevance": {
+      "https://example.com/research/verifier-search": 3,
+      "https://example.com/research/test-time-reasoning": 3,
+      "https://example.com/tech/reasoning-stack": 2
+    }
+  },
+  {
+    "id": "sports_nba",
+    "query": "latest NBA playoff updates",
+    "categories": ["sports"],
+    "documents": [
+      {
+        "title": "NBA playoff bracket tightens after overtime finish",
+        "summary": "The latest NBA playoff game ended in overtime and changed the Western Conference bracket.",
+        "url": "https://example.com/sports/nba-overtime",
+        "source": "ESPN",
+        "category": "sports",
+        "published_at": "2026-05-11T03:00:00+00:00",
+        "credibility_score": 0.82,
+        "citation_snippet": "The latest NBA playoff game ended in overtime."
+      },
+      {
+        "title": "Lakers injury update changes Game 6 expectations",
+        "summary": "An injury update for the Lakers changed expectations heading into Game 6.",
+        "url": "https://example.com/sports/lakers-injury",
+        "source": "BBC Sport",
+        "category": "sports",
+        "published_at": "2026-05-10T20:00:00+00:00",
+        "credibility_score": 0.76,
+        "citation_snippet": "An injury update for the Lakers changed expectations heading into Game 6."
+      },
+      {
+        "title": "Numbers behind the NBA's most efficient playoff offense",
+        "summary": "An analysis of why one team is dominating half-court offense in the postseason.",
+        "url": "https://example.com/sports/nba-offense",
+        "source": "The Athletic",
+        "category": "sports",
+        "published_at": "2026-05-09T17:00:00+00:00",
+        "credibility_score": 0.79,
+        "citation_snippet": "One team is dominating half-court offense in the postseason."
+      },
+      {
+        "title": "AI agents get better at software tool use",
+        "summary": "New AI agents can recover from tool failures in software workflows.",
+        "url": "https://example.com/tech/agents-coding",
+        "source": "TechCrunch",
+        "category": "tech",
+        "published_at": "2026-05-11T10:00:00+00:00",
+        "credibility_score": 0.78,
+        "citation_snippet": "New AI agents can recover from tool failures."
+      },
+      {
+        "title": "NHL playoff crowd sets home-ice record",
+        "summary": "A hockey playoff crowd set a new home-ice record.",
+        "url": "https://example.com/sports/nhl-crowd",
+        "source": "ESPN",
+        "category": "sports",
+        "published_at": "2026-05-08T21:00:00+00:00",
+        "credibility_score": 0.71,
+        "citation_snippet": "A hockey playoff crowd set a new home-ice record."
+      }
+    ],
+    "relevance": {
+      "https://example.com/sports/nba-overtime": 3,
+      "https://example.com/sports/lakers-injury": 3,
+      "https://example.com/sports/nba-offense": 2
+    }
+  },
+  {
+    "id": "general_middle_east",
+    "query": "middle east conflict updates",
+    "categories": ["general"],
+    "documents": [
+      {
+        "title": "Shipping routes disrupted as conflict widens in the Middle East",
+        "summary": "Regional conflict disrupted shipping and energy routes, raising concerns about global trade and oil prices.",
+        "url": "https://example.com/general/middle-east-shipping",
+        "source": "BBC World",
+        "category": "general",
+        "published_at": "2026-05-11T08:00:00+00:00",
+        "credibility_score": 0.84,
+        "citation_snippet": "Regional conflict disrupted shipping and energy routes."
+      },
+      {
+        "title": "Lawmakers seek answers after new strikes near the Strait of Hormuz",
+        "summary": "New strikes near the Strait of Hormuz intensified calls for clarity on the conflict's escalation.",
+        "url": "https://example.com/general/hormuz-strikes",
+        "source": "NPR World",
+        "category": "general",
+        "published_at": "2026-05-11T06:00:00+00:00",
+        "credibility_score": 0.82,
+        "citation_snippet": "New strikes near the Strait of Hormuz intensified calls for clarity."
+      },
+      {
+        "title": "Oil traders watch Tehran facility damage for next supply shock",
+        "summary": "Market watchers are tracking damage to oil facilities for signs of further supply disruption.",
+        "url": "https://example.com/general/oil-facilities",
+        "source": "Reuters World",
+        "category": "general",
+        "published_at": "2026-05-10T23:00:00+00:00",
+        "credibility_score": 0.88,
+        "citation_snippet": "Market watchers are tracking damage to oil facilities."
+      },
+      {
+        "title": "Reasoning model scales with verifier-guided search",
+        "summary": "Researchers describe a verifier-guided search method that improves reasoning accuracy.",
+        "url": "https://example.com/research/verifier-search",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-11T11:00:00+00:00",
+        "credibility_score": 0.88,
+        "citation_snippet": "A verifier-guided search method improves reasoning accuracy."
+      },
+      {
+        "title": "Middle East airlines reroute flights around conflict zones",
+        "summary": "Airlines in the region are rerouting flights as the security situation changes day by day.",
+        "url": "https://example.com/general/airline-reroutes",
+        "source": "BBC World",
+        "category": "general",
+        "published_at": "2026-05-10T19:00:00+00:00",
+        "credibility_score": 0.81,
+        "citation_snippet": "Airlines in the region are rerouting flights as the security situation changes."
+      }
+    ],
+    "relevance": {
+      "https://example.com/general/middle-east-shipping": 3,
+      "https://example.com/general/hormuz-strikes": 3,
+      "https://example.com/general/oil-facilities": 2,
+      "https://example.com/general/airline-reroutes": 2
+    }
+  },
+  {
+    "id": "tech_open_source_models",
+    "query": "open source LLM releases this week",
+    "categories": ["tech", "research"],
+    "documents": [
+      {
+        "title": "Open-source LLM release adds larger context windows",
+        "summary": "A new open-source LLM release focuses on longer context windows and lower inference costs.",
+        "url": "https://example.com/tech/oss-llm-context",
+        "source": "The Verge",
+        "category": "tech",
+        "published_at": "2026-05-11T16:00:00+00:00",
+        "credibility_score": 0.76,
+        "citation_snippet": "A new open-source LLM release focuses on longer context windows."
+      },
+      {
+        "title": "Researchers publish multilingual open model leaderboard",
+        "summary": "A multilingual leaderboard compares open models on reasoning and translation tasks.",
+        "url": "https://example.com/research/open-model-leaderboard",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-10T14:30:00+00:00",
+        "credibility_score": 0.83,
+        "citation_snippet": "A multilingual leaderboard compares open models on reasoning tasks."
+      },
+      {
+        "title": "Community release bundles model, evals, and inference stack",
+        "summary": "An open release bundles weights, evaluation data, and an optimized inference stack.",
+        "url": "https://example.com/community/open-release-stack",
+        "source": "Hugging Face Blog",
+        "category": "tech",
+        "published_at": "2026-05-09T11:00:00+00:00",
+        "credibility_score": 0.74,
+        "citation_snippet": "An open release bundles weights, evaluation data, and an optimized inference stack."
+      },
+      {
+        "title": "Football club changes manager after cup loss",
+        "summary": "A football club changed its manager after a cup loss.",
+        "url": "https://example.com/sports/cup-manager",
+        "source": "BBC Sport",
+        "category": "sports",
+        "published_at": "2026-05-11T09:00:00+00:00",
+        "credibility_score": 0.69,
+        "citation_snippet": "A football club changed its manager after a cup loss."
+      }
+    ],
+    "relevance": {
+      "https://example.com/tech/oss-llm-context": 3,
+      "https://example.com/research/open-model-leaderboard": 2,
+      "https://example.com/community/open-release-stack": 2
+    }
+  },
+  {
+    "id": "research_quantum",
+    "query": "quantum computing research breakthroughs",
+    "categories": ["research", "tech", "general"],
+    "documents": [
+      {
+        "title": "Researchers report new quantum error mitigation result",
+        "summary": "A new paper reports improved error mitigation in superconducting quantum systems.",
+        "url": "https://example.com/research/quantum-error",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-11T12:00:00+00:00",
+        "credibility_score": 0.87,
+        "citation_snippet": "A new paper reports improved error mitigation."
+      },
+      {
+        "title": "IBM updates roadmap for modular quantum systems",
+        "summary": "IBM updated its modular quantum roadmap and highlighted nearer-term systems integration milestones.",
+        "url": "https://example.com/tech/ibm-quantum-roadmap",
+        "source": "TechCrunch",
+        "category": "tech",
+        "published_at": "2026-05-10T10:15:00+00:00",
+        "credibility_score": 0.77,
+        "citation_snippet": "IBM updated its modular quantum roadmap."
+      },
+      {
+        "title": "Photonic chip paper improves stability benchmark",
+        "summary": "A photonic quantum computing paper reports better stability across repeated tests.",
+        "url": "https://example.com/research/photonic-stability",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-09T21:00:00+00:00",
+        "credibility_score": 0.85,
+        "citation_snippet": "A photonic quantum computing paper reports better stability."
+      },
+      {
+        "title": "Regional airlines reroute flights across the Middle East",
+        "summary": "Airlines adjusted routes amid regional instability.",
+        "url": "https://example.com/general/airline-reroutes",
+        "source": "BBC World",
+        "category": "general",
+        "published_at": "2026-05-10T19:00:00+00:00",
+        "credibility_score": 0.81,
+        "citation_snippet": "Airlines adjusted routes amid regional instability."
+      }
+    ],
+    "relevance": {
+      "https://example.com/research/quantum-error": 3,
+      "https://example.com/research/photonic-stability": 3,
+      "https://example.com/tech/ibm-quantum-roadmap": 2
+    }
+  },
+  {
+    "id": "sports_nfl",
+    "query": "NFL trade rumors and injury updates",
+    "categories": ["sports"],
+    "documents": [
+      {
+        "title": "Quarterback injury reshapes NFL depth chart heading into minicamp",
+        "summary": "A quarterback injury changed expectations for the team's depth chart and trade posture.",
+        "url": "https://example.com/sports/nfl-qb-injury",
+        "source": "ESPN",
+        "category": "sports",
+        "published_at": "2026-05-11T07:30:00+00:00",
+        "credibility_score": 0.81,
+        "citation_snippet": "A quarterback injury changed expectations for the team's depth chart."
+      },
+      {
+        "title": "Front office weighs trade options after contract standoff",
+        "summary": "A front office is considering trade options while contract talks stall.",
+        "url": "https://example.com/sports/nfl-trade-standoff",
+        "source": "NFL Network",
+        "category": "sports",
+        "published_at": "2026-05-10T18:10:00+00:00",
+        "credibility_score": 0.79,
+        "citation_snippet": "A front office is considering trade options while contract talks stall."
+      },
+      {
+        "title": "Film room: why an NFL defense changed its pressure package",
+        "summary": "Analysts explain how one defense changed its pressure looks in recent games.",
+        "url": "https://example.com/sports/nfl-pressure-package",
+        "source": "The Athletic",
+        "category": "sports",
+        "published_at": "2026-05-09T13:00:00+00:00",
+        "credibility_score": 0.77,
+        "citation_snippet": "Analysts explain how one defense changed its pressure looks."
+      },
+      {
+        "title": "Open-source LLM release adds larger context windows",
+        "summary": "A new open-source LLM release focuses on longer context windows and lower inference costs.",
+        "url": "https://example.com/tech/oss-llm-context",
+        "source": "The Verge",
+        "category": "tech",
+        "published_at": "2026-05-11T16:00:00+00:00",
+        "credibility_score": 0.76,
+        "citation_snippet": "A new open-source LLM release focuses on longer context windows."
+      }
+    ],
+    "relevance": {
+      "https://example.com/sports/nfl-qb-injury": 3,
+      "https://example.com/sports/nfl-trade-standoff": 3,
+      "https://example.com/sports/nfl-pressure-package": 2
+    }
+  },
+  {
+    "id": "general_supply_chain",
+    "query": "global supply chain disruption news",
+    "categories": ["general", "tech"],
+    "documents": [
+      {
+        "title": "Shipping routes disrupted as conflict widens in the Middle East",
+        "summary": "Regional conflict disrupted shipping and energy routes, raising concerns about global trade and oil prices.",
+        "url": "https://example.com/general/middle-east-shipping",
+        "source": "BBC World",
+        "category": "general",
+        "published_at": "2026-05-11T08:00:00+00:00",
+        "credibility_score": 0.84,
+        "citation_snippet": "Regional conflict disrupted shipping and energy routes."
+      },
+      {
+        "title": "Port congestion slows electronics exports in Asia",
+        "summary": "Congestion at major ports slowed electronics exports and extended delivery windows.",
+        "url": "https://example.com/general/port-congestion",
+        "source": "Reuters World",
+        "category": "general",
+        "published_at": "2026-05-10T07:00:00+00:00",
+        "credibility_score": 0.87,
+        "citation_snippet": "Congestion at major ports slowed electronics exports."
+      },
+      {
+        "title": "Chip supplier warns of logistics delays for server customers",
+        "summary": "A chip supplier warned that logistics delays may affect server customers this quarter.",
+        "url": "https://example.com/tech/chip-logistics-delays",
+        "source": "The Verge",
+        "category": "tech",
+        "published_at": "2026-05-09T16:00:00+00:00",
+        "credibility_score": 0.75,
+        "citation_snippet": "A chip supplier warned that logistics delays may affect server customers."
+      },
+      {
+        "title": "Researchers publish multilingual open model leaderboard",
+        "summary": "A multilingual leaderboard compares open models on reasoning and translation tasks.",
+        "url": "https://example.com/research/open-model-leaderboard",
+        "source": "arXiv",
+        "category": "research",
+        "published_at": "2026-05-10T14:30:00+00:00",
+        "credibility_score": 0.83,
+        "citation_snippet": "A multilingual leaderboard compares open models."
+      }
+    ],
+    "relevance": {
+      "https://example.com/general/middle-east-shipping": 3,
+      "https://example.com/general/port-congestion": 3,
+      "https://example.com/tech/chip-logistics-delays": 2
+    }
+  }
+]
