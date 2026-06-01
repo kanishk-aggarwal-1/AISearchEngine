@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     enable_metrics: bool = True
     log_level: str = "INFO"
+    log_format: str = "text"  # "text" for development, "json" for production
     rate_limit_per_minute: int = 90
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
