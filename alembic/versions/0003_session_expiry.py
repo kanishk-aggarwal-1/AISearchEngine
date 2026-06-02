@@ -40,9 +40,9 @@ def upgrade() -> None:
             "WHERE expires_at IS NULL"
         )
     else:
-        # PostgreSQL syntax
+        # PostgreSQL syntax (cast text to timestamp)
         op.execute(
-            "UPDATE auth_sessions SET expires_at = (created_at + interval '30 days') "
+            "UPDATE auth_sessions SET expires_at = (CAST(created_at AS timestamp) + interval '30 days') "
             "WHERE expires_at IS NULL"
         )
 
