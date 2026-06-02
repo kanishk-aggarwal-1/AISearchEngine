@@ -28,8 +28,9 @@ def upgrade() -> None:
         )
 
     # Backfill: grant existing sessions 30 days from their creation date.
+    # Use PostgreSQL syntax for Neon database
     op.execute(
-        "UPDATE auth_sessions SET expires_at = datetime(created_at, '+30 days') "
+        "UPDATE auth_sessions SET expires_at = (created_at + interval '30 days') "
         "WHERE expires_at IS NULL"
     )
 
