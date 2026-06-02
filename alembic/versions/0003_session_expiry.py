@@ -28,11 +28,23 @@ def upgrade() -> None:
         )
 
     # Backfill: grant existing sessions 30 days from their creation date.
-    # Use PostgreSQL syntax for Neon database
-    op.execute(
-        "UPDATE auth_sessions SET expires_at = (created_at + interval '30 days') "
-        "WHERE expires_at IS NULL"
-    )
+    # Use dialect-specific SQL for SQLite vs PostgreSQL
+    from alembic.migration import MigrationContext
+    ctx = MigrationContext.configure(op.get_bind())
+    dialect = ctx.dialect.name
+
+    if dialect == "sqlite":
+        # SQLite syntax
+        op.execute(
+            "UPDATE auth_sessions SET expires_at = datetime(created_at, '+30 days') "
+            "WHERE expires_at IS NULL"
+        )
+    else:
+        # PostgreSQL syntax
+        op.execute(
+            "UPDATE auth_sessions SET expires_at = (created_at + interval '30 days') "
+            "WHERE expires_at IS NULL"
+        )
 
     # Tighten to NOT NULL now that every row has a value.
     with op.batch_alter_table("auth_sessions") as batch_op:
