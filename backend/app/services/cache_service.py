@@ -58,7 +58,8 @@ class CacheService:
         await self.set_json("query_cache", query_key, payload, ttl_minutes)
 
     async def incr(self, key: str, ttl_seconds: int = 60) -> int:
-        """Atomically increment a counter and set TTL on first write. Returns new count."""
+        """Atomically increment a counter and set TTL on first write. Returns new count.
+        Returns 0 when Redis is unavailable so callers fall back to in-process limiting."""
         if not self.using_redis:
             return 0
         full_key = f"{self.prefix}:{key}"
@@ -68,8 +69,8 @@ class CacheService:
                 await self.client.expire(full_key, ttl_seconds)
             return count
         except Exception as exc:
-            self.logger.warning("redis_incr_failed key=%s error=%s", key, exc)
-            return 0
+            self.logger.warning("redis_incr_failed key=%s error=%s — falling back to in-process", key, exc)
+            return 0  # fall back to in-process rate limiting in main.py
 
     async def ping(self) -> bool:
         if not self.using_redis:

@@ -1,10 +1,13 @@
-﻿from datetime import datetime
+﻿import asyncio
+from datetime import datetime
 from typing import List
 
 import feedparser
 
 from backend.app.models import SourceDoc
 from backend.app.sources.base import SourceProvider
+
+_RSS_TIMEOUT_SECONDS = 8
 
 
 class RssSourceProvider(SourceProvider):
@@ -14,7 +17,14 @@ class RssSourceProvider(SourceProvider):
         self.category = category
 
     async def search(self, query: str, limit: int) -> List[SourceDoc]:
-        parsed = feedparser.parse(self.feed_url)
+        loop = asyncio.get_event_loop()
+        try:
+            parsed = await asyncio.wait_for(
+                loop.run_in_executor(None, feedparser.parse, self.feed_url),
+                timeout=_RSS_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return []
         terms = [term.strip().lower() for term in query.split() if term.strip()]
         docs: List[SourceDoc] = []
 

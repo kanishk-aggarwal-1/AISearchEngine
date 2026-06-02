@@ -9,6 +9,12 @@ from backend.app.container import cache, embedding_service, metrics, store, vect
 router = APIRouter()
 
 
+@router.get("/ping")
+async def ping() -> dict:
+    """Lightweight keep-alive endpoint."""
+    return {"ok": True}
+
+
 @router.get("/health")
 async def health() -> dict:
     return {
