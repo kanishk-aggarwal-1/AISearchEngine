@@ -1,20 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { ExplanationMode, ResearchInsight, SourceDoc } from "../types/api";
 
-export function useResearch(apiUrl) {
-  const [researchInsight, setResearchInsight] = useState(null);
-  const [researchPapers, setResearchPapers] = useState([]);
-  const [explainedPaper, setExplainedPaper] = useState(null);
-  const [comparePapers, setComparePapers] = useState([]);
-  const [paperComparison, setPaperComparison] = useState(null);
+interface PaperComparison {
+  left_title: string;
+  right_title: string;
+  same_theme: boolean;
+  shared_authors: string[];
+}
 
-  // Auto-compare when exactly two papers are selected
+export function useResearch(apiUrl: string) {
+  const [researchInsight, setResearchInsight] = useState<ResearchInsight | null>(null);
+  const [researchPapers, setResearchPapers] = useState<SourceDoc[]>([]);
+  const [explainedPaper, setExplainedPaper] = useState<{ summary: string; key_takeaways: string[] } | null>(null);
+  const [comparePapers, setComparePapers] = useState<SourceDoc[]>([]);
+  const [paperComparison, setPaperComparison] = useState<PaperComparison | null>(null);
+
   useEffect(() => {
-    if (comparePapers.length !== 2) {
-      setPaperComparison(null);
-      return;
-    }
+    if (comparePapers.length !== 2) { setPaperComparison(null); return; }
     const run = async () => {
       const r = await fetch(`${apiUrl}/research/compare-papers`, {
         method: "POST",
@@ -22,18 +26,18 @@ export function useResearch(apiUrl) {
         body: JSON.stringify({ left: comparePapers[0], right: comparePapers[1] }),
       });
       if (!r.ok) return;
-      setPaperComparison(await r.json());
+      setPaperComparison(await r.json() as PaperComparison);
     };
     run();
   }, [comparePapers, apiUrl]);
 
-  const fetchResearchInsights = useCallback(async (query) => {
+  const fetchResearchInsights = useCallback(async (query: string) => {
     const r = await fetch(`${apiUrl}/research/insights?query=${encodeURIComponent(query)}`);
     if (!r.ok) return;
-    setResearchInsight(await r.json());
+    setResearchInsight(await r.json() as ResearchInsight);
   }, [apiUrl]);
 
-  const fetchResearchPapers = useCallback(async (query, recencyDays) => {
+  const fetchResearchPapers = useCallback(async (query: string, recencyDays: number) => {
     const r = await fetch(
       `${apiUrl}/research/papers?query=${encodeURIComponent(query)}&recency_days=${Math.max(recencyDays, 7)}`
     );
@@ -45,7 +49,7 @@ export function useResearch(apiUrl) {
     setComparePapers([]);
   }, [apiUrl]);
 
-  const explainPaper = useCallback(async (paper, mode) => {
+  const explainPaper = useCallback(async (paper: SourceDoc, mode: ExplanationMode) => {
     const r = await fetch(`${apiUrl}/research/explain-paper`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -55,7 +59,7 @@ export function useResearch(apiUrl) {
     setExplainedPaper(await r.json());
   }, [apiUrl]);
 
-  const toggleComparePaper = useCallback((paper) => {
+  const toggleComparePaper = useCallback((paper: SourceDoc) => {
     setComparePapers((prev) => {
       const exists = prev.find((p) => p.url === paper.url);
       if (exists) return prev.filter((p) => p.url !== paper.url);
@@ -64,14 +68,8 @@ export function useResearch(apiUrl) {
   }, []);
 
   return {
-    researchInsight,
-    researchPapers,
-    explainedPaper,
-    comparePapers,
-    paperComparison,
-    fetchResearchInsights,
-    fetchResearchPapers,
-    explainPaper,
-    toggleComparePaper,
+    researchInsight, researchPapers, explainedPaper,
+    comparePapers, paperComparison,
+    fetchResearchInsights, fetchResearchPapers, explainPaper, toggleComparePaper,
   };
 }

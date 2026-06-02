@@ -1,25 +1,45 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import type { createFetch } from "../lib/api";
+import type {
+  Category,
+  ExplanationFormat,
+  ExplanationMode,
+  SearchResponse,
+  SearchHistoryItem,
+  SavedSessionItem,
+  SourceType,
+  SortBy,
+} from "../types/api";
 
-export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = {}) {
+type ApiFetchType = ReturnType<typeof createFetch>;
+
+type Callbacks = { onError?: (msg: string) => void; onInfo?: (msg: string) => void };
+
+export function useSearch(
+  apiUrl: string,
+  activeUserId: string,
+  apiFetch: ApiFetchType,
+  { onError, onInfo }: Callbacks = {}
+) {
   const [query, setQuery] = useState("latest breakthroughs in AI agents");
   const [compareAgainst, setCompareAgainst] = useState("");
   const [topK, setTopK] = useState(6);
-  const [mode, setMode] = useState("beginner");
-  const [explanationFormat, setExplanationFormat] = useState("standard");
+  const [mode, setMode] = useState<ExplanationMode>("beginner");
+  const [explanationFormat, setExplanationFormat] = useState<ExplanationFormat>("standard");
   const [timeline, setTimeline] = useState(true);
-  const [selected, setSelected] = useState(["tech", "research", "general"]);
+  const [selected, setSelected] = useState<Category[]>(["tech", "research", "general"]);
   const [recencyDays, setRecencyDays] = useState(7);
-  const [sortBy, setSortBy] = useState("relevance");
+  const [sortBy, setSortBy] = useState<SortBy>("relevance");
   const [sourceFilterText, setSourceFilterText] = useState("");
-  const [sourceTypesSelected, setSourceTypesSelected] = useState([]);
+  const [sourceTypesSelected, setSourceTypesSelected] = useState<SourceType[]>([]);
 
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<SearchResponse | null>(null);
   const [followUpQuestion, setFollowUpQuestion] = useState("");
-  const [followUpResponse, setFollowUpResponse] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [savedSessions, setSavedSessions] = useState([]);
+  const [followUpResponse, setFollowUpResponse] = useState<{ response: string; key_points: string[] } | null>(null);
+  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+  const [savedSessions, setSavedSessions] = useState<SavedSessionItem[]>([]);
   const [sessionLabel, setSessionLabel] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -29,16 +49,16 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
   );
 
   const appliedFiltersText = result?.applied_filters
-    ? `Recency: ${result.applied_filters.recency_days || "any"}d | Sort: ${result.applied_filters.sort_by}`
+    ? `Recency: ${result.applied_filters.recency_days ?? "any"}d | Sort: ${result.applied_filters.sort_by}`
     : "";
 
-  const toggleCategory = useCallback((category) => {
+  const toggleCategory = useCallback((category: Category) => {
     setSelected((prev) =>
       prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category]
     );
   }, []);
 
-  const toggleSourceType = useCallback((sourceType) => {
+  const toggleSourceType = useCallback((sourceType: SourceType) => {
     setSourceTypesSelected((prev) =>
       prev.includes(sourceType) ? prev.filter((s) => s !== sourceType) : [...prev, sourceType]
     );
@@ -53,14 +73,14 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
     setTimeline(true);
   }, []);
 
-  const useHeadlineQuery = useCallback((headline) => {
+  const useHeadlineQuery = useCallback((headline: { title: string; category: Category }) => {
     setQuery(headline.title);
     setSelected([headline.category]);
     setCompareAgainst("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  const useSuggestedQuery = useCallback((suggestion) => {
+  const useSuggestedQuery = useCallback((suggestion: string) => {
     setQuery(suggestion);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
@@ -69,7 +89,7 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
     try {
       const r = await apiFetch("/me/search-history?limit=12");
       if (!r.ok) { setHistory([]); return; }
-      setHistory(await r.json());
+      setHistory(await r.json() as SearchHistoryItem[]);
     } catch {
       setHistory([]);
     }
@@ -79,13 +99,13 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
     try {
       const r = await apiFetch("/me/saved-sessions?limit=12");
       if (!r.ok) { setSavedSessions([]); return; }
-      setSavedSessions(await r.json());
+      setSavedSessions(await r.json() as SavedSessionItem[]);
     } catch {
       setSavedSessions([]);
     }
   }, [apiFetch]);
 
-  const runSearch = useCallback(async (event) => {
+  const runSearch = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
     onError?.("");
@@ -111,10 +131,10 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
         }),
       });
       if (!r.ok) throw new Error(`Request failed with status ${r.status}`);
-      setResult(await r.json());
+      setResult(await r.json() as SearchResponse);
       loadHistory();
     } catch (err) {
-      onError?.(err.message || "Search failed");
+      onError?.((err as Error).message || "Search failed");
     } finally {
       setLoading(false);
     }
@@ -124,7 +144,7 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
     sortBy, onError, onInfo, loadHistory,
   ]);
 
-  const saveCurrentSession = useCallback(async (contextId, token) => {
+  const saveCurrentSession = useCallback(async (contextId: string | undefined, token: string | null) => {
     if (!contextId || !token) return;
     try {
       const r = await apiFetch(`/me/saved-sessions/${contextId}`, {
@@ -136,7 +156,7 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
       loadSavedSessions();
       onInfo?.("Session saved.");
     } catch (err) {
-      onError?.(err.message || "Unable to save session");
+      onError?.((err as Error).message || "Unable to save session");
     }
   }, [apiFetch, sessionLabel, query, onError, onInfo, loadSavedSessions]);
 
@@ -156,7 +176,7 @@ export function useSearch(apiUrl, activeUserId, apiFetch, { onError, onInfo } = 
       if (!r.ok) throw new Error("Follow-up failed");
       setFollowUpResponse(await r.json());
     } catch (err) {
-      onError?.(err.message || "Follow-up failed");
+      onError?.((err as Error).message || "Follow-up failed");
     }
   }, [apiUrl, activeUserId, result, followUpQuestion, mode, onError]);
 

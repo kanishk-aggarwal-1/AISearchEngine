@@ -20,8 +20,9 @@ import { usePersonalization } from "../hooks/usePersonalization";
 import { useResearch } from "../hooks/useResearch";
 import { useSearch } from "../hooks/useSearch";
 import { useSports } from "../hooks/useSports";
+import type { Category } from "../types/api";
 
-const categoryLabels = { tech: "Tech", research: "Research", sports: "Sports", general: "General" };
+const categoryLabels: Record<Category, string> = { tech: "Tech", research: "Research", sports: "Sports", general: "General" };
 
 export default function HomePage() {
   const [error, setError] = useState("");
@@ -29,44 +30,29 @@ export default function HomePage() {
   const [userId, setUserId] = useState("default");
 
   const apiUrl = useMemo(() => {
-    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-    if (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname)) {
-      return "/api";
-    }
-    return "http://127.0.0.1:8000";
+    const base = process.env.NEXT_PUBLIC_API_URL
+      || (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname) ? "/api" : "http://127.0.0.1:8000");
+    // All product endpoints live under /v1 — health/metrics stay at root
+    return `${base}/v1`;
   }, []);
 
   const auth = useAuth(apiUrl, { onError: setError, onInfo: setInfo });
   const activeUserId = auth.session?.user?.user_id || userId;
 
   const headlines = useHeadlines(apiUrl, 7, { onError: setError });
-
-  const search = useSearch(apiUrl, activeUserId, auth.apiFetch, {
-    onError: setError,
-    onInfo: setInfo,
-  });
-
-  const personalization = usePersonalization(apiUrl, activeUserId, auth.apiFetch, {
-    onError: setError,
-    onInfo: setInfo,
-  });
-
+  const search = useSearch(apiUrl, activeUserId, auth.apiFetch, { onError: setError, onInfo: setInfo });
+  const personalization = usePersonalization(apiUrl, activeUserId, auth.apiFetch, { onError: setError, onInfo: setInfo });
   const sports = useSports(apiUrl);
   const research = useResearch(apiUrl);
-  const admin = useAdmin(auth.session?.user?.is_admin, auth.apiFetch, {
-    onError: setError,
-    onInfo: setInfo,
-  });
+  const admin = useAdmin(auth.session?.user?.is_admin, auth.apiFetch, { onError: setError, onInfo: setInfo });
 
   return (
     <main className="page-shell">
       <nav className="top-nav">
         <p className="badge">SignalScope AI</p>
         <div className="nav-links">
-          {Object.entries(categoryLabels).map(([slug, label]) => (
-            <Link key={slug} href={`/category/${slug}`} className="text-link">
-              {label}
-            </Link>
+          {(Object.entries(categoryLabels) as [Category, string][]).map(([slug, label]) => (
+            <Link key={slug} href={`/category/${slug}`} className="text-link">{label}</Link>
           ))}
         </div>
       </nav>
@@ -74,26 +60,18 @@ export default function HomePage() {
       <section className="hero hero-split">
         <div>
           <h1>Search live signals. Explain what changed.</h1>
-          <p className="subtitle">
-            One workspace for tech news, research, sports, and world coverage with grounded
-            answers, saved sessions, and admin-aware source controls.
-          </p>
+          <p className="subtitle">One workspace for tech news, research, sports, and world coverage with grounded answers, saved sessions, and admin-aware source controls.</p>
         </div>
         <AuthPanel
-          session={auth.session}
-          authMode={auth.authMode} setAuthMode={auth.setAuthMode}
+          session={auth.session} authMode={auth.authMode} setAuthMode={auth.setAuthMode}
           authForm={auth.authForm} setAuthForm={auth.setAuthForm}
           resetEmail={auth.resetEmail} setResetEmail={auth.setResetEmail}
           resetToken={auth.resetToken} setResetToken={auth.setResetToken}
           resetPassword={auth.resetPassword} setResetPassword={auth.setResetPassword}
-          verificationPreview={auth.verificationPreview}
-          resetPreview={auth.resetPreview}
-          submitAuth={auth.submitAuth}
-          logout={auth.logout}
-          requestVerification={auth.requestVerification}
-          verifyEmailFromPreview={auth.verifyEmailFromPreview}
-          requestPasswordReset={auth.requestPasswordReset}
-          confirmPasswordReset={auth.confirmPasswordReset}
+          verificationPreview={auth.verificationPreview} resetPreview={auth.resetPreview}
+          submitAuth={auth.submitAuth} logout={auth.logout}
+          requestVerification={auth.requestVerification} verifyEmailFromPreview={auth.verifyEmailFromPreview}
+          requestPasswordReset={auth.requestPasswordReset} confirmPasswordReset={auth.confirmPasswordReset}
         />
       </section>
 
@@ -101,12 +79,9 @@ export default function HomePage() {
       {error && <p className="error">{error}</p>}
 
       <HeadlinesGrid
-        headlines={headlines.headlines}
-        headlinesUpdatedAt={headlines.headlinesUpdatedAt}
-        headlinesLoading={headlines.headlinesLoading}
-        loadHeadlines={headlines.loadHeadlines}
-        onHeadlineClick={search.useHeadlineQuery}
-        onBookmark={personalization.addBookmark}
+        headlines={headlines.headlines} headlinesUpdatedAt={headlines.headlinesUpdatedAt}
+        headlinesLoading={headlines.headlinesLoading} loadHeadlines={headlines.loadHeadlines}
+        onHeadlineClick={search.useHeadlineQuery} onBookmark={personalization.addBookmark}
       />
 
       <SearchForm
@@ -122,10 +97,8 @@ export default function HomePage() {
         sourceFilterText={search.sourceFilterText} setSourceFilterText={search.setSourceFilterText}
         sourceTypesSelected={search.sourceTypesSelected} toggleSourceType={search.toggleSourceType}
         activeUserId={activeUserId} setUserId={setUserId} session={auth.session}
-        loading={search.loading}
-        onSubmit={search.runSearch}
-        onRefreshFollows={personalization.refreshFollows}
-        onRefreshAlerts={personalization.refreshAlerts}
+        loading={search.loading} onSubmit={search.runSearch}
+        onRefreshFollows={personalization.refreshFollows} onRefreshAlerts={personalization.refreshAlerts}
         onFetchSportsInsights={() => sports.fetchSportsInsights(search.query)}
         onFetchSportsDashboard={() => sports.fetchSportsDashboard(search.recencyDays)}
         onFetchResearchInsights={() => research.fetchResearchInsights(search.query)}
@@ -140,10 +113,8 @@ export default function HomePage() {
         onCreateAlert={() => personalization.createAlert(personalization.alertQuery, search.selected)}
         delivery={personalization.delivery} setDelivery={personalization.setDelivery}
         deliveryTest={personalization.deliveryTest}
-        onSaveDelivery={personalization.saveDelivery}
-        onTestDelivery={personalization.testDelivery}
-        bookmarks={personalization.bookmarks}
-        onRemoveBookmark={personalization.removeBookmark}
+        onSaveDelivery={personalization.saveDelivery} onTestDelivery={personalization.testDelivery}
+        bookmarks={personalization.bookmarks} onRemoveBookmark={personalization.removeBookmark}
         activeUserId={activeUserId}
       />
 
@@ -152,17 +123,12 @@ export default function HomePage() {
         history={search.history} onHistorySelect={search.setQuery}
         savedSessions={search.savedSessions}
         sessionLabel={search.sessionLabel} setSessionLabel={search.setSessionLabel}
-        onSaveSession={search.saveCurrentSession}
-        result={search.result}
-        followed={personalization.followed}
-        alerts={personalization.alerts}
-        bookmarks={personalization.bookmarks}
+        onSaveSession={search.saveCurrentSession} result={search.result}
+        followed={personalization.followed} alerts={personalization.alerts} bookmarks={personalization.bookmarks}
       />
 
       <SearchResults
-        result={search.result}
-        appliedFiltersText={search.appliedFiltersText}
-        session={auth.session}
+        result={search.result} appliedFiltersText={search.appliedFiltersText} session={auth.session}
         followUpQuestion={search.followUpQuestion} setFollowUpQuestion={search.setFollowUpQuestion}
         followUpResponse={search.followUpResponse}
         sessionLabel={search.sessionLabel} setSessionLabel={search.setSessionLabel}
@@ -180,15 +146,12 @@ export default function HomePage() {
       <section className="two-grid">
         <SportsWorkspace
           sportsTeam={sports.sportsTeam} setSportsTeam={sports.setSportsTeam}
-          sportsInsight={sports.sportsInsight}
-          sportsDashboard={sports.sportsDashboard}
+          sportsInsight={sports.sportsInsight} sportsDashboard={sports.sportsDashboard}
           onLoadTeam={() => sports.fetchSportsDashboard(search.recencyDays)}
         />
         <ResearchWorkspace
-          researchInsight={research.researchInsight}
-          researchPapers={research.researchPapers}
-          explainedPaper={research.explainedPaper}
-          paperComparison={research.paperComparison}
+          researchInsight={research.researchInsight} researchPapers={research.researchPapers}
+          explainedPaper={research.explainedPaper} paperComparison={research.paperComparison}
           comparePapers={research.comparePapers}
           onExplainPaper={(paper) => research.explainPaper(paper, search.mode)}
           onToggleComparePaper={research.toggleComparePaper}
@@ -196,15 +159,11 @@ export default function HomePage() {
       </section>
 
       <AdminDashboard
-        session={auth.session}
-        adminData={admin.adminData}
-        adminSources={admin.adminSources}
+        session={auth.session} adminData={admin.adminData} adminSources={admin.adminSources}
         adminLoading={admin.adminLoading}
         reingestTopic={admin.reingestTopic} setReingestTopic={admin.setReingestTopic}
-        onRefresh={admin.loadAdminData}
-        onToggleSource={admin.toggleSourceEnabled}
-        onReingest={admin.triggerReingest}
-        selected={search.selected}
+        onRefresh={admin.loadAdminData} onToggleSource={admin.toggleSourceEnabled}
+        onReingest={admin.triggerReingest} selected={search.selected}
       />
     </main>
   );

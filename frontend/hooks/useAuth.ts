@@ -2,16 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFetch } from "../lib/api";
+import type {
+  AuthFormState,
+  AuthSession,
+  AuthUser,
+  TokenPreviewResponse,
+} from "../types/api";
 
-export function useAuth(apiUrl, { onError, onInfo } = {}) {
-  const [session, setSession] = useState(null);
-  const [authMode, setAuthMode] = useState("login");
-  const [authForm, setAuthForm] = useState({ email: "", password: "", display_name: "" });
+type Callbacks = { onError?: (msg: string) => void; onInfo?: (msg: string) => void };
+type ApiFetch = ReturnType<typeof createFetch>;
+
+export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authForm, setAuthForm] = useState<AuthFormState>({ email: "", password: "", display_name: "" });
   const [resetEmail, setResetEmail] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [resetPassword, setResetPassword] = useState("");
-  const [verificationPreview, setVerificationPreview] = useState(null);
-  const [resetPreview, setResetPreview] = useState(null);
+  const [verificationPreview, setVerificationPreview] = useState<TokenPreviewResponse | null>(null);
+  const [resetPreview, setResetPreview] = useState<TokenPreviewResponse | null>(null);
 
   const token = session?.token ?? null;
   const activeUserId = session?.user?.user_id ?? "default";
@@ -22,24 +31,23 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
     onError?.("Your session expired. Please sign in again.");
   }, [onError]);
 
-  const apiFetch = useMemo(
+  const apiFetch: ApiFetch = useMemo(
     () => createFetch(apiUrl, token, onExpiry),
     [apiUrl, token, onExpiry]
   );
 
-  // Restore session from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem("signalscope_session");
     if (!stored) return;
     try {
-      const parsed = JSON.parse(stored);
+      const parsed = JSON.parse(stored) as AuthSession;
       setSession(parsed);
     } catch {
       localStorage.removeItem("signalscope_session");
     }
   }, []);
 
-  const persistSession = useCallback((payload) => {
+  const persistSession = useCallback((payload: AuthSession) => {
     setSession(payload);
     localStorage.setItem("signalscope_session", JSON.stringify(payload));
   }, []);
@@ -56,7 +64,7 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
           body: JSON.stringify(authForm),
         });
         if (!r.ok) {
-          const p = await r.json().catch(() => ({}));
+          const p = await r.json().catch(() => ({})) as { detail?: string };
           throw new Error(p.detail || "Unable to register");
         }
       }
@@ -66,14 +74,14 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
         body: JSON.stringify({ email: authForm.email, password: authForm.password }),
       });
       if (!r.ok) {
-        const p = await r.json().catch(() => ({}));
+        const p = await r.json().catch(() => ({})) as { detail?: string };
         throw new Error(p.detail || "Unable to sign in");
       }
-      persistSession(await r.json());
+      persistSession(await r.json() as AuthSession);
       setAuthForm((prev) => ({ ...prev, password: "" }));
       onInfo?.(isRegister ? "Account created and signed in." : "Signed in successfully.");
     } catch (err) {
-      onError?.(err.message || "Authentication failed");
+      onError?.((err as Error).message || "Authentication failed");
     }
   }, [apiUrl, authMode, authForm, onError, onInfo, persistSession]);
 
@@ -93,10 +101,10 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
     try {
       const r = await apiFetch("/auth/request-verification", { method: "POST" });
       if (!r.ok) throw new Error("Unable to request verification");
-      setVerificationPreview(await r.json());
+      setVerificationPreview(await r.json() as TokenPreviewResponse);
       onInfo?.("Verification token generated for local development.");
     } catch (err) {
-      onError?.(err.message || "Unable to request verification");
+      onError?.((err as Error).message || "Unable to request verification");
     }
   }, [apiFetch, onError, onInfo]);
 
@@ -109,16 +117,16 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
         body: JSON.stringify({ token: verificationPreview.token_preview }),
       });
       if (!r.ok) throw new Error("Unable to verify email");
-      const user = await r.json();
+      const user = await r.json() as AuthUser;
       setSession((prev) => {
         if (!prev) return prev;
-        const next = { ...prev, user };
+        const next: AuthSession = { ...prev, user };
         localStorage.setItem("signalscope_session", JSON.stringify(next));
         return next;
       });
       onInfo?.("Email verified.");
     } catch (err) {
-      onError?.(err.message || "Unable to verify email");
+      onError?.((err as Error).message || "Unable to verify email");
     }
   }, [apiUrl, verificationPreview, onError, onInfo]);
 
@@ -130,10 +138,10 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
         body: JSON.stringify({ email: resetEmail || authForm.email }),
       });
       if (!r.ok) throw new Error("Unable to request password reset");
-      setResetPreview(await r.json());
+      setResetPreview(await r.json() as TokenPreviewResponse);
       onInfo?.("Password reset token generated for local development.");
     } catch (err) {
-      onError?.(err.message || "Unable to request password reset");
+      onError?.((err as Error).message || "Unable to request password reset");
     }
   }, [apiUrl, resetEmail, authForm.email, onError, onInfo]);
 
@@ -148,11 +156,11 @@ export function useAuth(apiUrl, { onError, onInfo } = {}) {
         }),
       });
       if (!r.ok) throw new Error("Unable to reset password");
-      const p = await r.json();
+      const p = await r.json() as { message?: string };
       onInfo?.(p.message || "Password updated.");
       setResetPassword("");
     } catch (err) {
-      onError?.(err.message || "Unable to reset password");
+      onError?.((err as Error).message || "Unable to reset password");
     }
   }, [apiUrl, resetToken, resetPreview, resetPassword, onError, onInfo]);
 

@@ -1,4 +1,6 @@
-export function formatDateTime(value) {
+import type { SourceDoc } from "../types/api";
+
+export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "n/a";
   try {
     return new Date(value).toLocaleString();
@@ -7,8 +9,8 @@ export function formatDateTime(value) {
   }
 }
 
-export function whyThisSource(source) {
-  const reasons = [];
+export function whyThisSource(source: SourceDoc): string {
+  const reasons: string[] = [];
   if ((source.lexical_score || 0) >= 2) reasons.push("strong keyword overlap");
   if ((source.semantic_score || 0) >= 0.75) reasons.push("high semantic match");
   if ((source.recency_score || 0) >= 0.8) reasons.push("recent coverage");

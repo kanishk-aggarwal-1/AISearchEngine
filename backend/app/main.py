@@ -1,6 +1,7 @@
 import random
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,23 +21,57 @@ ALLOWED_ORIGINS = [
     *[item.strip() for item in settings.extra_frontend_origins.split(",") if item.strip()],
 ]
 
-app = FastAPI(title="AI Search Retriever", version="0.7.1")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.strict_real_embeddings and not embedding_service.real_embeddings_enabled:
+        raise RuntimeError(
+            "strict_real_embeddings=True but no embedding provider is configured. "
+            "Set GEMINI_API_KEY or OPENAI_API_KEY in your .env, "
+            "or set STRICT_REAL_EMBEDDINGS=false to allow hash-based fallback."
+        )
+    worker_count = int(__import__("os").environ.get("WEB_CONCURRENCY", "1"))
+    if worker_count > 1 and not cache.using_redis:
+        logger.warning(
+            "multi_worker_no_redis workers=%d — rate limiting is per-worker only. "
+            "Set REDIS_URL and CACHE_BACKEND=redis for accurate rate limiting.",
+            worker_count,
+        )
+    await scheduler.start()
+    logger.info(
+        "startup_complete vector_enabled=%s real_embeddings=%s strict_real_embeddings=%s cache_backend=%s redis_enabled=%s",
+        vector_index.enabled,
+        embedding_service.real_embeddings_enabled,
+        settings.strict_real_embeddings,
+        settings.cache_backend,
+        cache.using_redis,
+    )
+    yield
+    await scheduler.stop()
+    await cache.close()
+
+
+app = FastAPI(title="AI Search Retriever", version="0.7.1", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
+# Unversioned: health and metrics endpoints stay at root for monitoring tools
 app.include_router(health.router)
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(admin.router)
-app.include_router(search.router)
-app.include_router(browse.router)
-app.include_router(sports.router)
-app.include_router(research.router)
+
+# Versioned API — all product endpoints under /v1/
+_V1 = {"prefix": "/v1"}
+app.include_router(auth.router, **_V1)
+app.include_router(users.router, **_V1)
+app.include_router(admin.router, **_V1)
+app.include_router(search.router, **_V1)
+app.include_router(browse.router, **_V1)
+app.include_router(sports.router, **_V1)
+app.include_router(research.router, **_V1)
 
 
 def _security_headers() -> dict:
@@ -45,6 +80,14 @@ def _security_headers() -> dict:
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "same-origin",
         "Cache-Control": "no-store",
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "   # Next.js requires unsafe-inline for hydration
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; "
+            "frame-ancestors 'none'"
+        ),
     }
 
 
@@ -128,26 +171,3 @@ async def security_middleware(request: Request, call_next):
     return response
 
 
-@app.on_event("startup")
-async def startup_event() -> None:
-    if settings.strict_real_embeddings and not embedding_service.real_embeddings_enabled:
-        raise RuntimeError(
-            "strict_real_embeddings=True but no embedding provider is configured. "
-            "Set GEMINI_API_KEY or OPENAI_API_KEY in your .env, "
-            "or set STRICT_REAL_EMBEDDINGS=false to allow hash-based fallback."
-        )
-    await scheduler.start()
-    logger.info(
-        "startup_complete vector_enabled=%s real_embeddings=%s strict_real_embeddings=%s cache_backend=%s redis_enabled=%s",
-        vector_index.enabled,
-        embedding_service.real_embeddings_enabled,
-        settings.strict_real_embeddings,
-        settings.cache_backend,
-        cache.using_redis,
-    )
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    await scheduler.stop()
-    await cache.close()
