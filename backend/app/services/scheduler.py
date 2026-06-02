@@ -29,7 +29,20 @@ class SchedulerService:
         self.logger.info("scheduler_stopped")
 
     async def _run_loop(self) -> None:
+        # Run first ingest immediately so the app has data on cold start
+        # instead of waiting a full interval before first results appear
+        self.logger.info("scheduler_first_run starting immediately on cold start")
+        try:
+            inserted = await self.ingestion.ingest_seed_topics()
+            self.logger.info("scheduler_first_ingest_completed inserted=%s", inserted)
+            if self.alerts:
+                delivered = await self.alerts.process_alerts()
+                self.logger.info("scheduler_first_alerts_completed delivered=%s", delivered)
+        except Exception as exc:
+            self.logger.warning("scheduler_first_ingest_failed error=%s — will retry next interval", exc)
+
         while True:
+            await asyncio.sleep(self.interval_seconds)
             try:
                 inserted = await self.ingestion.ingest_seed_topics()
                 self.logger.info("scheduler_ingest_completed inserted=%s", inserted)
@@ -38,4 +51,3 @@ class SchedulerService:
                     self.logger.info("scheduler_alerts_completed delivered=%s", delivered)
             except Exception as exc:
                 self.logger.warning("scheduler_ingest_failed error=%s", exc)
-            await asyncio.sleep(self.interval_seconds)

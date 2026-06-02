@@ -22,6 +22,25 @@ ALLOWED_ORIGINS = [
 ]
 
 
+def _warn_missing_config() -> None:
+    """Warn about missing optional but important configuration at startup."""
+    if not settings.gemini_api_key and not settings.openai_api_key:
+        logger.warning(
+            "no_llm_key configured — explanations will use fallback mode. "
+            "Set GEMINI_API_KEY or OPENAI_API_KEY for real AI explanations."
+        )
+    if not settings.newsapi_key:
+        logger.warning(
+            "no_newsapi_key configured — general news will rely on RSS feeds only. "
+            "Set NEWSAPI_KEY for broader news coverage."
+        )
+    if not cache.using_redis:
+        logger.warning(
+            "redis_not_connected — caching and rate limiting are in-process only. "
+            "Set REDIS_URL and CACHE_BACKEND=redis for production caching."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     if settings.strict_real_embeddings and not embedding_service.real_embeddings_enabled:
@@ -37,7 +56,11 @@ async def lifespan(app: FastAPI):
             "Set REDIS_URL and CACHE_BACKEND=redis for accurate rate limiting.",
             worker_count,
         )
-    await scheduler.start()
+    _warn_missing_config()
+    try:
+        await scheduler.start()
+    except Exception as exc:
+        logger.warning("scheduler_start_failed error=%s — continuing without scheduler", exc)
     logger.info(
         "startup_complete vector_enabled=%s real_embeddings=%s strict_real_embeddings=%s cache_backend=%s redis_enabled=%s",
         vector_index.enabled,
@@ -47,7 +70,10 @@ async def lifespan(app: FastAPI):
         cache.using_redis,
     )
     yield
-    await scheduler.stop()
+    try:
+        await scheduler.stop()
+    except Exception:
+        pass
     await cache.close()
 
 
