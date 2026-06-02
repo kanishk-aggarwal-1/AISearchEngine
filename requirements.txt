@@ -11,6 +11,7 @@ google-genai
 qdrant-client
 redis[hiredis]
 psycopg[binary]
+psycopg2-binary
 SQLAlchemy
 alembic
 
