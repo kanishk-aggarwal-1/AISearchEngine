@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import List, Literal
 
-from pydantic import BaseModel, EmailStr, Field
+import re
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 Category = Literal["tech", "research", "sports", "general"]
@@ -127,10 +129,20 @@ class BookmarkItem(BaseModel):
     saved_at: str | None = None
 
 
+_PASSWORD_RE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$")
+
+
 class AuthRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
     display_name: str = Field(min_length=2, max_length=80)
+
+    @field_validator("password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        if not _PASSWORD_RE.match(v):
+            raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
+        return v
 
 
 class AuthLoginRequest(BaseModel):
@@ -164,6 +176,13 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirmRequest(BaseModel):
     token: str
     new_password: str = Field(min_length=10, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def password_complexity(cls, v: str) -> str:
+        if not _PASSWORD_RE.match(v):
+            raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
+        return v
 
 
 class TokenConfirmRequest(BaseModel):

@@ -106,16 +106,16 @@ class TestAuthFlow(unittest.TestCase):
 
     # ── HTTP-level tests ─────────────────────────────────────────────────────
 
-    def _register_and_login(self, client, email="test@example.com", password="strongpass99"):
+    def _register_and_login(self, client, email="test@example.com", password="Strongpass99"):
         # The first registration always becomes admin. Burn the slot with a throwaway
         # so the test user is a regular (non-admin) member.
-        client.post("/auth/register", json={
-            "email": "setup-admin@example.com", "password": "adminsetup1!", "display_name": "Setup"
+        client.post("/v1/auth/register", json={
+            "email": "setup-admin@example.com", "password": "Adminsetup1!", "display_name": "Setup"
         })
-        client.post("/auth/register", json={
+        client.post("/v1/auth/register", json={
             "email": email, "password": password, "display_name": "Tester"
         })
-        resp = client.post("/auth/login", json={"email": email, "password": password})
+        resp = client.post("/v1/auth/login", json={"email": email, "password": password})
         return resp.json()["token"]
 
     def test_register_login_protected_endpoint(self):
@@ -123,7 +123,7 @@ class TestAuthFlow(unittest.TestCase):
             client = TestClient(main_module.app)
             token = self._register_and_login(client)
             resp = client.get(
-                "/me/search-history",
+                "/v1/me/search-history",
                 headers={"Authorization": f"Bearer {token}"},
             )
             self.assertEqual(resp.status_code, 200)
@@ -131,20 +131,28 @@ class TestAuthFlow(unittest.TestCase):
 
     def test_protected_endpoint_without_token_returns_401(self):
         """Every /users/{id}/* and /me/* endpoint must reject unauthenticated requests."""
-        with _auth_context() as store:
+        with _auth_context():
             client = TestClient(main_module.app)
-            token = self._register_and_login(client)
-            user_id = store.authenticate_user("test@example.com", "strongpass99").user.user_id
+            # Get user_id from the auth response instead of re-authenticating directly
+            client.post("/v1/auth/register", json={
+                "email": "setup-admin@example.com", "password": "Adminsetup1!", "display_name": "Setup"
+            })
+            client.post("/v1/auth/register", json={
+                "email": "test@example.com", "password": "Strongpass99", "display_name": "Tester"
+            })
+            login_resp = client.post("/v1/auth/login", json={"email": "test@example.com", "password": "Strongpass99"})
+            user_id = login_resp.json()["user"]["user_id"]
+            token = login_resp.json()["token"]  # noqa: F841 — registered but not used here
 
             endpoints = [
-                ("GET", f"/users/{user_id}/profile"),
-                ("GET", f"/users/{user_id}/follows"),
-                ("GET", f"/users/{user_id}/alerts"),
-                ("GET", f"/users/{user_id}/bookmarks"),
-                ("GET", f"/users/{user_id}/alert-delivery"),
-                ("GET", "/me/search-history"),
-                ("GET", "/me/saved-sessions"),
-                ("GET", "/me/watchlist"),
+                ("GET", f"/v1/users/{user_id}/profile"),
+                ("GET", f"/v1/users/{user_id}/follows"),
+                ("GET", f"/v1/users/{user_id}/alerts"),
+                ("GET", f"/v1/users/{user_id}/bookmarks"),
+                ("GET", f"/v1/users/{user_id}/alert-delivery"),
+                ("GET", "/v1/me/search-history"),
+                ("GET", "/v1/me/saved-sessions"),
+                ("GET", "/v1/me/watchlist"),
             ]
             for method, path in endpoints:
                 resp = client.request(method, path)
@@ -158,24 +166,24 @@ class TestAuthFlow(unittest.TestCase):
         with _auth_context():
             client = TestClient(main_module.app)
             # First registration → admin (throwaway). Subsequent → non-admin.
-            client.post("/auth/register", json={
-                "email": "setup-admin@example.com", "password": "adminsetup1!", "display_name": "Setup"
+            client.post("/v1/auth/register", json={
+                "email": "setup-admin@example.com", "password": "Adminsetup1!", "display_name": "Setup"
             })
-            client.post("/auth/register", json={
-                "email": "usera@example.com", "password": "strongpass99", "display_name": "UserA"
+            client.post("/v1/auth/register", json={
+                "email": "usera@example.com", "password": "Strongpass99", "display_name": "UserA"
             })
-            resp_b = client.post("/auth/register", json={
-                "email": "userb@example.com", "password": "strongpass99", "display_name": "UserB"
+            resp_b = client.post("/v1/auth/register", json={
+                "email": "userb@example.com", "password": "Strongpass99", "display_name": "UserB"
             })
-            login_a = client.post("/auth/login", json={
-                "email": "usera@example.com", "password": "strongpass99"
+            login_a = client.post("/v1/auth/login", json={
+                "email": "usera@example.com", "password": "Strongpass99"
             })
             self.assertEqual(login_a.status_code, 200, f"Login failed: {login_a.json()}")
             token_a = login_a.json()["token"]
             user_b_id = resp_b.json()["user_id"]
 
             resp = client.get(
-                f"/users/{user_b_id}/profile",
+                f"/v1/users/{user_b_id}/profile",
                 headers={"Authorization": f"Bearer {token_a}"},
             )
             self.assertEqual(resp.status_code, 403)
@@ -185,7 +193,7 @@ class TestAuthFlow(unittest.TestCase):
             client = TestClient(main_module.app)
             token = self._register_and_login(client)
             resp = client.get(
-                "/admin/dashboard",
+                "/v1/admin/dashboard",
                 headers={"Authorization": f"Bearer {token}"},
             )
             self.assertEqual(resp.status_code, 403)
@@ -194,9 +202,9 @@ class TestAuthFlow(unittest.TestCase):
         with _auth_context():
             client = TestClient(main_module.app)
             token = self._register_and_login(client)
-            client.post("/auth/logout", headers={"Authorization": f"Bearer {token}"})
+            client.post("/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
             resp = client.get(
-                "/me/search-history",
+                "/v1/me/search-history",
                 headers={"Authorization": f"Bearer {token}"},
             )
             self.assertEqual(resp.status_code, 401)
@@ -206,7 +214,7 @@ class TestAuthFlow(unittest.TestCase):
     def test_password_too_short_rejected(self):
         with _auth_context():
             client = TestClient(main_module.app)
-            resp = client.post("/auth/register", json={
+            resp = client.post("/v1/auth/register", json={
                 "email": "short@example.com",
                 "password": "abc12",     # 5 chars — below min_length=10
                 "display_name": "Test",
@@ -216,21 +224,41 @@ class TestAuthFlow(unittest.TestCase):
     def test_invalid_email_rejected(self):
         with _auth_context():
             client = TestClient(main_module.app)
-            resp = client.post("/auth/register", json={
+            resp = client.post("/v1/auth/register", json={
                 "email": "not-an-email",
                 "password": "validpassword1",
                 "display_name": "Test",
             })
             self.assertEqual(resp.status_code, 422)
 
+    def test_password_no_uppercase_rejected(self):
+        with _auth_context():
+            client = TestClient(main_module.app)
+            resp = client.post("/v1/auth/register", json={
+                "email": "weak@example.com",
+                "password": "alllowercase1",   # no uppercase
+                "display_name": "Weak",
+            })
+            self.assertEqual(resp.status_code, 422)
+
+    def test_password_no_digit_rejected(self):
+        with _auth_context():
+            client = TestClient(main_module.app)
+            resp = client.post("/v1/auth/register", json={
+                "email": "weak2@example.com",
+                "password": "NoDigitPassword",  # no digit
+                "display_name": "Weak",
+            })
+            self.assertEqual(resp.status_code, 422)
+
     def test_wrong_credentials_returns_401(self):
         with _auth_context():
             client = TestClient(main_module.app)
-            client.post("/auth/register", json={
-                "email": "legit@example.com", "password": "correctpass1", "display_name": "L"
+            client.post("/v1/auth/register", json={
+                "email": "legit@example.com", "password": "Correctpass1", "display_name": "Legit"
             })
-            resp = client.post("/auth/login", json={
-                "email": "legit@example.com", "password": "wrongpassword"
+            resp = client.post("/v1/auth/login", json={
+                "email": "legit@example.com", "password": "Wrongpassword1"
             })
             self.assertEqual(resp.status_code, 401)
 

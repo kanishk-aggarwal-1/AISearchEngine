@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { Category, SourceDoc } from "../types/api";
 
-export function useHeadlines(apiUrl, recencyDays, { onError } = {}) {
-  const [headlines, setHeadlines] = useState({});
+type Callbacks = { onError?: (msg: string) => void };
+
+export function useHeadlines(apiUrl: string, recencyDays: number, { onError }: Callbacks = {}) {
+  const [headlines, setHeadlines] = useState<Partial<Record<Category, SourceDoc[]>>>({});
   const [headlinesUpdatedAt, setHeadlinesUpdatedAt] = useState("");
   const [headlinesLoading, setHeadlinesLoading] = useState(true);
 
@@ -16,7 +19,7 @@ export function useHeadlines(apiUrl, recencyDays, { onError } = {}) {
       setHeadlines(data.categories || {});
       setHeadlinesUpdatedAt(data.updated_at || "");
     } catch (err) {
-      onError?.(err.message || "Unable to load headlines");
+      onError?.((err as Error).message || "Unable to load headlines");
     } finally {
       setHeadlinesLoading(false);
     }

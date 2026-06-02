@@ -1,37 +1,36 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { AdminData, Category, SourceStatus } from "../types/api";
+import type { createFetch } from "../lib/api";
 
-export function useAdmin(isAdmin, apiFetch, { onError, onInfo } = {}) {
-  const [adminData, setAdminData] = useState(null);
-  const [adminSources, setAdminSources] = useState([]);
+type ApiFetch = ReturnType<typeof createFetch>;
+type Callbacks = { onError?: (msg: string) => void; onInfo?: (msg: string) => void };
+
+export function useAdmin(isAdmin: boolean | undefined, apiFetch: ApiFetch, { onError, onInfo }: Callbacks = {}) {
+  const [adminData, setAdminData] = useState<AdminData | null>(null);
+  const [adminSources, setAdminSources] = useState<SourceStatus[]>([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [reingestTopic, setReingestTopic] = useState("");
 
   const loadAdminData = useCallback(async () => {
-    if (!isAdmin) {
-      setAdminData(null);
-      setAdminSources([]);
-      return;
-    }
+    if (!isAdmin) { setAdminData(null); setAdminSources([]); return; }
     setAdminLoading(true);
     try {
       const [dashboardRes, sourcesRes] = await Promise.all([
         apiFetch("/admin/dashboard?limit=8"),
         apiFetch("/admin/sources"),
       ]);
-      if (dashboardRes.ok) setAdminData(await dashboardRes.json());
-      if (sourcesRes.ok) setAdminSources(await sourcesRes.json());
+      if (dashboardRes.ok) setAdminData(await dashboardRes.json() as AdminData);
+      if (sourcesRes.ok) setAdminSources(await sourcesRes.json() as SourceStatus[]);
     } finally {
       setAdminLoading(false);
     }
   }, [isAdmin, apiFetch]);
 
-  useEffect(() => {
-    loadAdminData();
-  }, [loadAdminData]);
+  useEffect(() => { loadAdminData(); }, [loadAdminData]);
 
-  const toggleSourceEnabled = useCallback(async (sourceName, enabled, category) => {
+  const toggleSourceEnabled = useCallback(async (sourceName: string, enabled: boolean, category: string) => {
     try {
       const r = await apiFetch(
         `/admin/sources/${encodeURIComponent(sourceName)}?category=${encodeURIComponent(category || "unknown")}`,
@@ -40,11 +39,11 @@ export function useAdmin(isAdmin, apiFetch, { onError, onInfo } = {}) {
       if (!r.ok) throw new Error("Unable to update source state");
       await loadAdminData();
     } catch (err) {
-      onError?.(err.message || "Unable to update source state");
+      onError?.((err as Error).message || "Unable to update source state");
     }
   }, [apiFetch, onError, loadAdminData]);
 
-  const triggerReingest = useCallback(async (categories) => {
+  const triggerReingest = useCallback(async (categories: Category[]) => {
     if (!reingestTopic.trim()) return;
     try {
       const r = await apiFetch("/admin/reingest", {
@@ -57,17 +56,13 @@ export function useAdmin(isAdmin, apiFetch, { onError, onInfo } = {}) {
       setReingestTopic("");
       await loadAdminData();
     } catch (err) {
-      onError?.(err.message || "Unable to reingest topic");
+      onError?.((err as Error).message || "Unable to reingest topic");
     }
   }, [apiFetch, reingestTopic, onError, onInfo, loadAdminData]);
 
   return {
-    adminData,
-    adminSources,
-    adminLoading,
+    adminData, adminSources, adminLoading,
     reingestTopic, setReingestTopic,
-    loadAdminData,
-    toggleSourceEnabled,
-    triggerReingest,
+    loadAdminData, toggleSourceEnabled, triggerReingest,
   };
 }

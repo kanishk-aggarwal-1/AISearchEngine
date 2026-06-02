@@ -72,6 +72,10 @@ class DocumentStore:
 
     def _init_db(self) -> None:
         with self._connection() as conn:
+            # WAL mode allows concurrent reads alongside writes, eliminating
+            # "database is locked" errors under async FastAPI workloads.
+            if str(self.db_path) != ":memory:":
+                conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS documents (
