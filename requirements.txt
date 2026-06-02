@@ -13,3 +13,7 @@ redis[hiredis]
 psycopg[binary]
 SQLAlchemy
 alembic
+
+# Testing
+pytest
+pytest-asyncio

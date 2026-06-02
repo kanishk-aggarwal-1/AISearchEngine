@@ -126,26 +126,38 @@ class PhaseThreeTests(unittest.TestCase):
     def test_request_verification_uses_smtp_when_available(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             store = DocumentStore(str(Path(tmpdir) / "phase3_verify_email.db"))
-            with patch.object(main_module, "store", store), patch.object(
-                main_module, "email_service", SimpleNamespace(send=AsyncMock(return_value=True))
-            ):
+            mock_email = SimpleNamespace(send=AsyncMock(return_value=True))
+            fake_cache = SimpleNamespace(
+                using_redis=False,
+                incr=AsyncMock(return_value=1),
+                ping=AsyncMock(return_value=False),
+            )
+            # Patch store in the auth router and the shared dependencies module
+            with patch("backend.app.routers.auth.store", store), \
+                 patch("backend.app.routers.auth.email_service", mock_email), \
+                 patch("backend.app.dependencies.store", store), \
+                 patch("backend.app.main.cache", fake_cache), \
+                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
                 client = TestClient(main_module.app)
                 register = client.post(
-                    "/auth/register",
+                    "/v1/auth/register",
                     json={
                         "email": "mail@example.com",
-                        "password": "supersecret123",
+                        "password": "Supersecret123",   # uppercase required
                         "display_name": "Mail User",
                     },
                 )
                 self.assertEqual(register.status_code, 200)
                 login = client.post(
-                    "/auth/login",
-                    json={"email": "mail@example.com", "password": "supersecret123"},
+                    "/v1/auth/login",
+                    json={"email": "mail@example.com", "password": "Supersecret123"},
                 )
                 self.assertEqual(login.status_code, 200)
                 token = login.json()["token"]
-                response = client.post("/auth/request-verification", headers={"Authorization": f"Bearer {token}"})
+                response = client.post(
+                    "/v1/auth/request-verification",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertTrue(payload["email_sent"])

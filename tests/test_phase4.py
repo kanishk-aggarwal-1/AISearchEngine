@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
@@ -37,9 +38,13 @@ class PhaseFourTests(unittest.TestCase):
                     )
                 ]
             )
-            with patch.object(main_module, "store", store):
+            from types import SimpleNamespace
+            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
+            with patch("backend.app.routers.browse.store", store), \
+                 patch("backend.app.main.cache", fake_cache), \
+                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
                 client = TestClient(main_module.app)
-                response = client.get("/trending?category=tech&recency_days=7")
+                response = client.get("/v1/trending?category=tech&recency_days=7")
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertTrue(payload["topics"])
@@ -60,9 +65,12 @@ class PhaseFourTests(unittest.TestCase):
                     )
                 ]
             )
-            with patch.object(main_module, "store", store):
+            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
+            with patch("backend.app.routers.sports.store", store), \
+                 patch("backend.app.main.cache", fake_cache), \
+                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
                 client = TestClient(main_module.app)
-                response = client.get("/sports/team/Lakers?recency_days=14")
+                response = client.get("/v1/sports/team/Lakers?recency_days=14")
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.json()["team"], "Lakers")
                 self.assertTrue(response.json()["latest"])
@@ -92,10 +100,17 @@ class PhaseFourTests(unittest.TestCase):
                     ),
                 ]
             )
-            with patch.object(main_module, "store", store), \
-                 patch.object(main_module, "explainer", type("ExplainStub", (), {"explain": AsyncMock(return_value={"provider": "fallback", "explanation": "Summary", "key_takeaways": ["One"], "why_it_matters": "Why", "what_changed_last_week": "Week"})})()):
+            stub_explainer = type("E", (), {"explain": AsyncMock(return_value={
+                "provider": "fallback", "explanation": "Summary",
+                "key_takeaways": ["One"], "why_it_matters": "Why", "what_changed_last_week": "Week",
+            })})()
+            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
+            with patch("backend.app.routers.research.store", store), \
+                 patch("backend.app.routers.research.explainer", stub_explainer), \
+                 patch("backend.app.main.cache", fake_cache), \
+                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
                 client = TestClient(main_module.app)
-                response = client.get("/research/paper/1234.5678")
+                response = client.get("/v1/research/paper/1234.5678")
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertEqual(payload["paper"]["research_metadata"]["paper_id"], "1234.5678")
