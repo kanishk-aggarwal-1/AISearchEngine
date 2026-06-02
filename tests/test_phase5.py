@@ -68,28 +68,42 @@ class PhaseFiveTests(unittest.TestCase):
             self.assertEqual(freshness["errored_sources"], 0)
 
     def test_admin_dashboard_returns_snapshot(self):
+        from types import SimpleNamespace
         with tempfile.TemporaryDirectory() as tmpdir:
             store = DocumentStore(str(Path(tmpdir) / "phase5_admin.db"))
             store.record_source_result("Custom Source", "tech", 3, error="")
-            with patch.object(main_module, "store", store):
+            fake_cache = SimpleNamespace(
+                using_redis=False,
+                incr=__import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock(return_value=1),
+                ping=__import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock(return_value=False),
+            )
+            # Patch store in every module that uses it for these requests
+            with patch("backend.app.routers.auth.store", store), \
+                 patch("backend.app.routers.admin.store", store), \
+                 patch("backend.app.dependencies.store", store), \
+                 patch("backend.app.main.cache", fake_cache), \
+                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
                 client = TestClient(main_module.app)
                 register = client.post(
-                    "/auth/register",
+                    "/v1/auth/register",
                     json={
                         "email": "admin@example.com",
-                        "password": "supersecret123",
+                        "password": "Supersecret123",   # uppercase required by complexity validator
                         "display_name": "Admin User",
                     },
                 )
                 self.assertEqual(register.status_code, 200)
                 login = client.post(
-                    "/auth/login",
-                    json={"email": "admin@example.com", "password": "supersecret123"},
+                    "/v1/auth/login",
+                    json={"email": "admin@example.com", "password": "Supersecret123"},
                 )
                 self.assertEqual(login.status_code, 200)
                 token = login.json()["token"]
 
-                response = client.get("/admin/dashboard", headers={"Authorization": f"Bearer {token}"})
+                response = client.get(
+                    "/v1/admin/dashboard",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
                 self.assertEqual(response.status_code, 200)
                 payload = response.json()
                 self.assertIn("snapshot", payload)

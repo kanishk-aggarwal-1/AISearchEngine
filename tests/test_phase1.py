@@ -57,46 +57,55 @@ class PhaseOneTests(unittest.TestCase):
         self.assertEqual(json.loads(raw), payload)
 
     def test_no_result_search_returns_suggestions(self):
-        with patch.object(main_module, "registry", SimpleNamespace(gather=AsyncMock(return_value=[]))), \
-             patch.object(main_module, "enricher", SimpleNamespace(
+        fake_store = SimpleNamespace(
+            get_profile=lambda user_id: SimpleNamespace(user_id=user_id, preferred_categories=[], explanation_mode="beginner"),
+            get_follows=lambda user_id: [],
+            get_query_cache=lambda *args, **kwargs: None,
+            all_recent_documents=lambda categories, limit=180: [],
+            embedding_map=lambda categories, limit=300: {},
+            chunk_embedding_map=lambda categories, limit=800: {},
+            search_chunks=lambda query, categories, limit=40: [],
+            put_query_cache=lambda *args, **kwargs: None,
+            save_context=lambda *args, **kwargs: None,
+            add_search_history=lambda *args, **kwargs: None,
+            upsert_documents=lambda *args, **kwargs: 0,
+            canonicalize_url=lambda url, source, title: f"{source}:{title}",
+        )
+        fake_cache = SimpleNamespace(
+            get_query_cache=AsyncMock(return_value=None),
+            put_query_cache=AsyncMock(),
+            using_redis=False,
+            ping=AsyncMock(return_value=False),
+            incr=AsyncMock(return_value=1),
+        )
+        with patch("backend.app.routers.search.registry", SimpleNamespace(gather=AsyncMock(return_value=[]))), \
+             patch("backend.app.routers.search.enricher", SimpleNamespace(
                  enrich=lambda query, docs: docs,
                  contradictions=lambda docs: [],
                  claim_confidence=lambda docs, contradictions: 0.0,
                  timeline=lambda docs, max_points=8: [],
                  compare=lambda *args, **kwargs: None,
              )), \
-             patch.object(main_module, "retriever", SimpleNamespace(
+             patch("backend.app.routers.search.retriever", SimpleNamespace(
                  analyze_query=lambda query, categories: {"raw_query": query, "rewritten_query": query, "tokens": [], "intent": "mixed"},
                  rank_chunks=AsyncMock(return_value=([], {}, [])),
                  rank=AsyncMock(return_value=([], {}, [])),
              )), \
-             patch.object(main_module, "vector_index", SimpleNamespace(search=AsyncMock(return_value=[]), ensure_collection=AsyncMock(), upsert_documents=AsyncMock(return_value=0), enabled=False)), \
-             patch.object(main_module, "embedding_service", SimpleNamespace(embed=AsyncMock(return_value=[]), real_embeddings_enabled=False)), \
-             patch.object(main_module, "explainer", SimpleNamespace(explain=AsyncMock(return_value={
+             patch("backend.app.routers.search.vector_index", SimpleNamespace(search=AsyncMock(return_value=[]), ensure_collection=AsyncMock(), upsert_documents=AsyncMock(return_value=0), enabled=False)), \
+             patch("backend.app.routers.search.embedding_service", SimpleNamespace(embed=AsyncMock(return_value=[]), real_embeddings_enabled=False)), \
+             patch("backend.app.routers.search.explainer", SimpleNamespace(explain=AsyncMock(return_value={
                  "provider": "fallback",
                  "explanation": "No results found.",
                  "key_takeaways": ["No results found."],
                  "why_it_matters": "Broader retrieval often helps.",
                  "what_changed_last_week": "Not enough context.",
              }))), \
-             patch.object(main_module, "cache", SimpleNamespace(get_query_cache=AsyncMock(return_value=None), put_query_cache=AsyncMock(), using_redis=False, ping=AsyncMock(return_value=False))), \
-             patch.object(main_module, "store", SimpleNamespace(
-                 get_profile=lambda user_id: SimpleNamespace(user_id=user_id, preferred_categories=[], explanation_mode="beginner"),
-                 get_follows=lambda user_id: [],
-                 get_query_cache=lambda *args, **kwargs: None,
-                 all_recent_documents=lambda categories, limit=180: [],
-                 embedding_map=lambda categories, limit=300: {},
-                 chunk_embedding_map=lambda categories, limit=800: {},
-                 search_chunks=lambda query, categories, limit=40: [],
-                 put_query_cache=lambda *args, **kwargs: None,
-                 save_context=lambda *args, **kwargs: None,
-                 add_search_history=lambda *args, **kwargs: None,
-                 upsert_documents=lambda *args, **kwargs: 0,
-                 canonicalize_url=lambda url, source, title: f"{source}:{title}",
-             )):
+             patch("backend.app.routers.search.cache", fake_cache), \
+             patch("backend.app.routers.search.store", fake_store), \
+             patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
             client = TestClient(main_module.app)
             response = client.post(
-                "/search",
+                "/v1/search",
                 json={
                     "query": "middle east conflict",
                     "categories": ["general"],
@@ -114,16 +123,20 @@ class PhaseOneTests(unittest.TestCase):
 
     def test_headlines_endpoint_uses_cache_when_present(self):
         cached_payload = {"updated_at": "2026-01-01T00:00:00+00:00", "categories": {"tech": []}, "recency_days": 7}
-        with patch.object(main_module, "cache", SimpleNamespace(
+        fake_cache = SimpleNamespace(
             get=AsyncMock(return_value=json.dumps(cached_payload)),
             set_json=AsyncMock(),
             get_query_cache=AsyncMock(return_value=None),
             put_query_cache=AsyncMock(),
             using_redis=True,
             ping=AsyncMock(return_value=True),
-        )):
+            incr=AsyncMock(return_value=1),
+        )
+        with patch("backend.app.routers.browse.cache", fake_cache), \
+             patch("backend.app.main.cache", fake_cache), \
+             patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
             client = TestClient(main_module.app)
-            response = client.get("/headlines?per_category=4&recency_days=7")
+            response = client.get("/v1/headlines?per_category=4&recency_days=7")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json(), cached_payload)
 
