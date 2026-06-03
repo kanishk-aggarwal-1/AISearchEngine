@@ -112,7 +112,7 @@ class PostgresStoreContractTests(unittest.TestCase):
         import secrets
 
         key = f"qk_{secrets.token_hex(4)}"
-        self.store.put_query_cache(key, {"answer": "cached"}, 20)
+        self.store.put_query_cache(key, {"answer": "cached"})
         cached = self.store.get_query_cache(key)
         self.assertIsNotNone(cached)
 
@@ -122,10 +122,10 @@ class PostgresStoreContractTests(unittest.TestCase):
 
         user = self.store.create_user(f"pg_{secrets.token_hex(4)}@example.com", "Strongpass123", "P")
         self.store.upsert_profile(
-            UserProfile(user_id=user.user_id, preferred_categories=["tech"], explanation_mode="expert")
+            UserProfile(user_id=user.user_id, preferred_categories=["tech"], explanation_mode="analyst")
         )
         profile = self.store.get_profile(user.user_id)
-        self.assertEqual(profile.explanation_mode, "expert")
+        self.assertEqual(profile.explanation_mode, "analyst")
 
         self.store.add_follow(user.user_id, "OpenAI")
         follows = self.store.get_follows(user.user_id)
@@ -139,7 +139,8 @@ class PostgresStoreContractTests(unittest.TestCase):
         self.store.add_bookmark(user.user_id, doc)
         bookmarks = self.store.get_bookmarks(user.user_id)
         self.assertTrue(bookmarks)
-        self.store.delete_bookmark(user.user_id, bookmarks[0].canonical_url)
+        self.assertEqual(bookmarks[0].source.url, doc.url)
+        self.store.delete_bookmark(user.user_id, bookmarks[0].id)
         self.assertEqual(self.store.get_bookmarks(user.user_id), [])
 
     def test_alerts(self):
@@ -170,7 +171,7 @@ class PostgresStoreContractTests(unittest.TestCase):
 
         self.assertTrue(self.store.get_search_history(user.user_id))
         self.assertTrue(self.store.get_saved_sessions(user.user_id))
-        self.assertIsNotNone(self.store.get_context(ctx))
+        self.assertIsNotNone(self.store.get_context(ctx, user.user_id))
 
     # ── Source health / ingestion runs ──────────────────────────────────────
     def test_source_health_and_ingestion(self):
