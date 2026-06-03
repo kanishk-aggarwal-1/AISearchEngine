@@ -4,19 +4,12 @@ from datetime import datetime, timezone
 from typing import Any, List
 
 from backend.app.models import (
-    AlertDeliverySettings,
     AlertRule,
-    AuthMessage,
-    AuthSessionResponse,
     AuthUser,
     BookmarkItem,
     Category,
-    IngestionRunRecord,
     SavedSessionItem,
-    SearchHistoryItem,
     SourceDoc,
-    SourceStatus,
-    UserProfile,
 )
 from backend.app.services.document_store import DocumentStore
 

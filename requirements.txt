@@ -1,20 +1,36 @@
-fastapi
-uvicorn
-httpx
-feedparser
-pydantic[email]
-pydantic-settings
-python-json-logger
-python-dotenv
-openai
-google-genai
-qdrant-client
-redis[hiredis]
-psycopg[binary]
-psycopg2-binary
-SQLAlchemy
-alembic
+# ── Web framework ────────────────────────────────────────────────────────────
+fastapi==0.135.1
+uvicorn==0.42.0
+httpx==0.28.1
 
-# Testing
-pytest
-pytest-asyncio
+# ── Validation / settings ────────────────────────────────────────────────────
+pydantic[email]==2.12.5
+pydantic-settings==2.13.1
+
+# ── Ingestion ────────────────────────────────────────────────────────────────
+feedparser==6.0.12
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+# Pinned to 2.x: v3+ relocated the `pythonjsonlogger.jsonlogger` import path
+# that logging_service.py depends on.
+python-json-logger==2.0.7
+python-dotenv==1.2.2
+
+# ── AI providers ─────────────────────────────────────────────────────────────
+openai==2.24.0
+google-genai==1.66.0
+
+# ── Vector / cache ───────────────────────────────────────────────────────────
+qdrant-client==1.17.0
+redis[hiredis]==7.1.0
+
+# ── Database ─────────────────────────────────────────────────────────────────
+# psycopg (v3) is the runtime driver; psycopg2-binary is required by Alembic.
+psycopg[binary]==3.3.4
+psycopg2-binary==2.9.11
+SQLAlchemy==2.0.48
+alembic==1.18.4
+
+# ── Dev / test / lint ────────────────────────────────────────────────────────
+pytest==9.0.2
+ruff==0.15.15

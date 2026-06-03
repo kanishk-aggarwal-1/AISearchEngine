@@ -1,6 +1,5 @@
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
 from typing import List
 from datetime import datetime, timezone
 
@@ -49,9 +48,11 @@ async def add_follow(request: Request, user_id: str, payload: FollowRequest) -> 
 
 
 @router.get("/users/{user_id}/follows", response_model=FollowResponse)
-async def get_follows(request: Request, user_id: str) -> FollowResponse:
+async def get_follows(request: Request, user_id: str, limit: int = 200, offset: int = 0) -> FollowResponse:
     require_own_user(request, user_id)
-    return FollowResponse(user_id=user_id, entities=store.get_follows(user_id))
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    return FollowResponse(user_id=user_id, entities=store.get_follows(user_id, limit=limit, offset=offset))
 
 
 @router.post("/users/{user_id}/alerts", response_model=AlertRule)
@@ -63,9 +64,11 @@ async def add_alert(request: Request, user_id: str, rule: AlertRule) -> AlertRul
 
 
 @router.get("/users/{user_id}/alerts", response_model=List[AlertRule])
-async def get_alerts(request: Request, user_id: str) -> List[AlertRule]:
+async def get_alerts(request: Request, user_id: str, limit: int = 200, offset: int = 0) -> List[AlertRule]:
     require_own_user(request, user_id)
-    return store.get_alerts(user_id)
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    return store.get_alerts(user_id, limit=limit, offset=offset)
 
 
 @router.get("/users/{user_id}/alert-delivery", response_model=AlertDeliverySettings)
@@ -114,9 +117,11 @@ async def add_bookmark(request: Request, user_id: str, payload: BookmarkRequest)
 
 
 @router.get("/users/{user_id}/bookmarks", response_model=List[BookmarkItem])
-async def get_bookmarks(request: Request, user_id: str) -> List[BookmarkItem]:
+async def get_bookmarks(request: Request, user_id: str, limit: int = 200, offset: int = 0) -> List[BookmarkItem]:
     require_own_user(request, user_id)
-    return store.get_bookmarks(user_id)
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+    return store.get_bookmarks(user_id, limit=limit, offset=offset)
 
 
 @router.delete("/users/{user_id}/bookmarks/{bookmark_id}")

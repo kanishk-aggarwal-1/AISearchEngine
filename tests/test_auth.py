@@ -98,10 +98,13 @@ class TestAuthFlow(unittest.TestCase):
             self.assertIsNone(user)
 
     def test_duplicate_email_raises(self):
+        import sqlite3
+
         with tempfile.TemporaryDirectory() as tmpdir:
             store = DocumentStore(str(Path(tmpdir) / "test.db"))
             store.create_user("dup@example.com", "password12345", "First")
-            with self.assertRaises(Exception):
+            # Unique constraint on email — duplicate insert must raise IntegrityError.
+            with self.assertRaises(sqlite3.IntegrityError):
                 store.create_user("dup@example.com", "password12345", "Second")
 
     # ── HTTP-level tests ─────────────────────────────────────────────────────

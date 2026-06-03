@@ -1,7 +1,6 @@
 import hashlib
 import json
 import time
-from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import List
 
@@ -14,7 +13,6 @@ from backend.app.container import (
 )
 from backend.app.models import (
     AppliedFilters,
-    Category,
     CompareRequest,
     FollowUpRequest,
     FollowUpResponse,
@@ -266,6 +264,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             sort_by=payload.sort_by,
         ),
         suggested_queries=(_suggested_queries(payload) if not ranked else []),
+        search_mode="semantic" if embedding_service.real_embeddings_enabled else "keyword",
     )
 
     payload_json = response.model_dump(mode="json")

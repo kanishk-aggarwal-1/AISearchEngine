@@ -48,7 +48,7 @@ export default function HomePage() {
 
   return (
     <main className="page-shell">
-      <nav className="top-nav">
+      <nav className="top-nav" aria-label="Category navigation">
         <p className="badge">SignalScope AI</p>
         <div className="nav-links">
           {(Object.entries(categoryLabels) as [Category, string][]).map(([slug, label]) => (
@@ -75,8 +75,8 @@ export default function HomePage() {
         />
       </section>
 
-      {info && <p className="info-banner">{info}</p>}
-      {error && <p className="error">{error}</p>}
+      {info && <p className="info-banner" role="status" aria-live="polite">{info}</p>}
+      {error && <p className="error" role="alert" aria-live="assertive">{error}</p>}
 
       <HeadlinesGrid
         headlines={headlines.headlines} headlinesUpdatedAt={headlines.headlinesUpdatedAt}
@@ -128,7 +128,7 @@ export default function HomePage() {
       />
 
       <SearchResults
-        result={search.result} appliedFiltersText={search.appliedFiltersText} session={auth.session}
+        result={search.result} loading={search.loading} appliedFiltersText={search.appliedFiltersText} session={auth.session}
         followUpQuestion={search.followUpQuestion} setFollowUpQuestion={search.setFollowUpQuestion}
         followUpResponse={search.followUpResponse}
         sessionLabel={search.sessionLabel} setSessionLabel={search.setSessionLabel}

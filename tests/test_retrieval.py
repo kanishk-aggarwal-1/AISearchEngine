@@ -252,7 +252,6 @@ class TestRankChunks(unittest.TestCase):
         self.retriever = RetrieverService(FakeEmbeddingService())
 
     def test_empty_chunks_returns_empty(self):
-        from backend.app.models import ChunkHit
         ranked, _, _ = _run(self.retriever.rank_chunks("machine learning", []))
         self.assertEqual(ranked, [])
 

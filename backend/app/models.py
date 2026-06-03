@@ -283,6 +283,9 @@ class SearchResponse(BaseModel):
     context_id: str
     applied_filters: AppliedFilters = Field(default_factory=AppliedFilters)
     suggested_queries: List[str] = Field(default_factory=list)
+    # "semantic" when real embeddings rank results, "keyword" when the
+    # hash-based lexical fallback is in use. Lets the UI be honest about mode.
+    search_mode: str = "keyword"
 
 
 class FollowRequest(BaseModel):

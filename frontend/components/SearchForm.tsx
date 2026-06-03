@@ -76,8 +76,8 @@ export default function SearchForm({
           <div><label className="label" htmlFor="sourceFilter">Source filter</label><input id="sourceFilter" value={sourceFilterText} onChange={(e) => setSourceFilterText(e.target.value)} placeholder="BBC World, arXiv" /></div>
         </div>
         <div className="controls-row">
-          <div className="chips">{categories.map((c) => <button type="button" key={c} className={selected.includes(c) ? "chip active" : "chip"} onClick={() => toggleCategory(c)}>{c}</button>)}</div>
-          <div className="chips">{sourceTypes.map((t) => <button type="button" key={t} className={sourceTypesSelected.includes(t) ? "chip active" : "chip"} onClick={() => toggleSourceType(t)}>{t}</button>)}</div>
+          <div className="chips" role="group" aria-label="Categories">{categories.map((c) => <button type="button" key={c} aria-pressed={selected.includes(c)} className={selected.includes(c) ? "chip active" : "chip"} onClick={() => toggleCategory(c)}>{c}</button>)}</div>
+          <div className="chips" role="group" aria-label="Source types">{sourceTypes.map((t) => <button type="button" key={t} aria-pressed={sourceTypesSelected.includes(t)} className={sourceTypesSelected.includes(t) ? "chip active" : "chip"} onClick={() => toggleSourceType(t)}>{t}</button>)}</div>
           <label className="toggle"><input type="checkbox" checked={timeline} onChange={(e) => setTimeline(e.target.checked)} />Include timeline</label>
         </div>
         <button className="search-button" type="submit" disabled={loading || !query.trim() || selected.length === 0}>{loading ? "Searching..." : "Run Search"}</button>

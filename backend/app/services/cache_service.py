@@ -72,6 +72,28 @@ class CacheService:
             self.logger.warning("redis_incr_failed key=%s error=%s — falling back to in-process", key, exc)
             return 0  # fall back to in-process rate limiting in main.py
 
+    async def get_int(self, key: str) -> int:
+        """Read an integer counter. Returns 0 when missing or Redis is unavailable."""
+        if not self.using_redis:
+            return 0
+        try:
+            raw = await self.client.get(f"{self.prefix}:{key}")
+            return int(raw) if raw is not None else 0
+        except (ValueError, TypeError):
+            return 0
+        except Exception as exc:
+            self.logger.warning("redis_get_int_failed key=%s error=%s", key, exc)
+            return 0
+
+    async def delete(self, key: str) -> None:
+        """Delete a prefixed key. No-op when Redis is unavailable."""
+        if not self.using_redis:
+            return
+        try:
+            await self.client.delete(f"{self.prefix}:{key}")
+        except Exception as exc:
+            self.logger.warning("redis_delete_failed key=%s error=%s", key, exc)
+
     async def ping(self) -> bool:
         if not self.using_redis:
             return False

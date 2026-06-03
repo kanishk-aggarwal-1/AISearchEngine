@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "text"  # "text" for development, "json" for production
     rate_limit_per_minute: int = 90
+    # Login brute-force protection: lock an email after N failed attempts
+    # within the lockout window (seconds).
+    login_max_attempts: int = 5
+    login_lockout_seconds: int = 900
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

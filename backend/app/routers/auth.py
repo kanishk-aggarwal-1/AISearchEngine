@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from backend.app.config import settings
-from backend.app.container import email_service, store
+from backend.app.container import email_service, login_throttle, store
 from backend.app.dependencies import bearer_token, current_user
 from backend.app.models import (
     AuthLoginRequest,
@@ -23,14 +23,22 @@ async def auth_register(payload: AuthRegisterRequest) -> AuthUser:
     try:
         return store.create_user(payload.email, payload.password, payload.display_name)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Unable to register user: {exc}")
+        raise HTTPException(status_code=400, detail=f"Unable to register user: {exc}") from exc
 
 
 @router.post("/login", response_model=AuthSessionResponse)
 async def auth_login(payload: AuthLoginRequest) -> AuthSessionResponse:
+    if await login_throttle.is_locked(payload.email):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed login attempts. Please try again later.",
+            headers={"Retry-After": str(settings.login_lockout_seconds)},
+        )
     session = store.authenticate_user(payload.email, payload.password)
     if not session:
+        await login_throttle.record_failure(payload.email)
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    await login_throttle.reset(payload.email)
     return session
 
 
