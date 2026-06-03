@@ -12,6 +12,7 @@ from backend.app.models import (
     SourceDoc,
 )
 from backend.app.services.document_store import DocumentStore
+from backend.app.services.logging_service import get_logger
 
 try:
     import psycopg
@@ -40,6 +41,10 @@ class PostgresDocumentStore(DocumentStore):
     def __init__(self, database_url: str):
         if psycopg is None:
             raise RuntimeError("Postgres support requires psycopg to be installed.")
+        # NOTE: we intentionally do NOT call super().__init__() (it opens SQLite).
+        # But several inherited methods rely on self.logger for audit logging, so
+        # it must be set up here or login/verify/reset crash on Postgres.
+        self.logger = get_logger("signalscope.store")
         self.database_url = self._normalize_database_url(database_url)
 
     def _normalize_database_url(self, database_url: str) -> str:
