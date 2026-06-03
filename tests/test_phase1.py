@@ -1,14 +1,12 @@
 import json
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from backend.app.models import SearchRequest, SourceDoc
 from backend.app.services.cache_service import CacheService
 from backend.app.services.document_store import DocumentStore
 import backend.app.main as main_module

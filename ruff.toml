@@ -1,0 +1,23 @@
+# Ruff configuration — https://docs.astral.sh/ruff/
+target-version = "py312"
+line-length = 120
+
+# Focused on correctness rather than stylistic churn:
+#   E/W: pycodestyle errors, F: pyflakes (real bugs), B: bugbear (likely bugs).
+# Modernization rules (UP), import sorting (I), and simplify (SIM) are left out
+# for now to avoid a large mechanical reformat; they can be enabled later.
+[lint]
+select = ["E", "W", "F", "B"]
+ignore = [
+    "E501",   # line length handled by formatter, not worth failing CI over
+    "B008",   # FastAPI uses function calls in argument defaults (Depends, etc.)
+]
+
+[lint.per-file-ignores]
+# Standalone script inserts project root on sys.path before importing app code.
+"scripts/run_eval.py" = ["E402"]
+# Tests use star-ish patterns, local imports, and intentional unused vars.
+"tests/*" = ["B011", "F841"]
+
+[lint.isort]
+known-first-party = ["backend"]

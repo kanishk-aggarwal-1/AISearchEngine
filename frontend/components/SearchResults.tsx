@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { AuthSession, SearchResponse, SourceDoc } from "../types/api";
 import SourceCard from "./SourceCard";
 
 interface Props {
   result: SearchResponse | null;
+  loading?: boolean;
   appliedFiltersText: string;
   session: AuthSession | null;
   followUpQuestion: string; setFollowUpQuestion: (v: string) => void;
@@ -22,18 +24,64 @@ interface Props {
 }
 
 export default function SearchResults({
-  result, appliedFiltersText, session,
+  result, loading, appliedFiltersText, session,
   followUpQuestion, setFollowUpQuestion, followUpResponse,
   sessionLabel, setSessionLabel, onSaveSession,
   onCreateAlert, onSetFollowEntity, onBookmark, onExplainPaper,
   onResetFilters, onExpandRecency, onSuggestedQuery, onRunFollowUp,
 }: Props) {
+  // The backend runs on a free tier that sleeps; first request can take ~30s
+  // to wake. Surface a friendly message once the wait crosses 8 seconds.
+  const [coldStart, setColdStart] = useState(false);
+  useEffect(() => {
+    if (!loading) { setColdStart(false); return; }
+    const timer = setTimeout(() => setColdStart(true), 8000);
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  if (loading) {
+    return (
+      <section className="result-grid" role="status" aria-live="polite" aria-busy="true">
+        <span className="visually-hidden">Loading search results…</span>
+        <article className="explanation-card">
+          <div className="skeleton skeleton-title" />
+          <div className="skeleton skeleton-line" />
+          <div className="skeleton skeleton-line" />
+          <div className="skeleton skeleton-line short" />
+          {coldStart && (
+            <p className="info-banner cold-start">
+              ⏳ Waking up the server… the free-tier backend sleeps after inactivity
+              and can take up to 30 seconds on the first request. Hang tight.
+            </p>
+          )}
+        </article>
+        <article className="sources-card" aria-hidden="true">
+          <div className="skeleton skeleton-title" />
+          <div className="skeleton skeleton-card" />
+          <div className="skeleton skeleton-card" />
+        </article>
+      </section>
+    );
+  }
+
   if (!result) return null;
   return (
     <>
       <section className="result-grid">
         <article className="explanation-card">
-          <h2>Explanation</h2>
+          <div className="result-header-row">
+            <h2>Explanation</h2>
+            <span
+              className={`mode-badge ${result.search_mode === "semantic" ? "mode-semantic" : "mode-keyword"}`}
+              title={
+                result.search_mode === "semantic"
+                  ? "Results ranked by semantic embeddings"
+                  : "Results ranked by keyword/lexical matching (no embedding provider configured)"
+              }
+            >
+              {result.search_mode === "semantic" ? "✦ Semantic" : "Keyword"}
+            </span>
+          </div>
           <p className="muted">Provider: {result.explanation_provider}</p>
           <p className="muted">{appliedFiltersText}</p>
           <p className="formatted-block">{result.explanation}</p>

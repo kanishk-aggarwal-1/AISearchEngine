@@ -10,6 +10,7 @@ from backend.app.services.enrichment_service import EnrichmentService
 from backend.app.services.explainer import ExplainerService
 from backend.app.services.ingestion import IngestionService
 from backend.app.services.logging_service import get_logger, setup_logging
+from backend.app.services.login_throttle import LoginThrottle
 from backend.app.services.observability_service import MetricsService
 from backend.app.services.retriever import RetrieverService
 from backend.app.services.scheduler import SchedulerService
@@ -24,6 +25,7 @@ metrics = MetricsService()
 
 store = create_store()
 cache = CacheService()
+login_throttle = LoginThrottle(cache, max_attempts=settings.login_max_attempts, window_seconds=settings.login_lockout_seconds)
 registry = SourceRegistry(store)
 enricher = EnrichmentService()
 embedding_service = EmbeddingService()

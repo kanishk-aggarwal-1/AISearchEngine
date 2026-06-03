@@ -90,6 +90,7 @@ export interface SearchResponse {
   context_id: string;
   applied_filters: AppliedFilters;
   suggested_queries: string[];
+  search_mode: "semantic" | "keyword";
 }
 
 export interface FollowUpResponse {

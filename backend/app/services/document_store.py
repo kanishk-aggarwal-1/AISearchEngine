@@ -1168,9 +1168,12 @@ class DocumentStore:
             )
         return self.get_follows(user_id)
 
-    def get_follows(self, user_id: str) -> List[str]:
+    def get_follows(self, user_id: str, limit: int = 200, offset: int = 0) -> List[str]:
         with self._connection() as conn:
-            rows = conn.execute("SELECT entity FROM user_follows WHERE user_id = ? ORDER BY created_at DESC", (user_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT entity FROM user_follows WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
+            ).fetchall()
         return [row["entity"] for row in rows]
 
     def add_alert(self, rule: AlertRule) -> AlertRule:
@@ -1185,9 +1188,12 @@ class DocumentStore:
             alert_id = int(cursor.lastrowid)
         return AlertRule(id=alert_id, user_id=rule.user_id, query=rule.query, categories=rule.categories, enabled=rule.enabled)
 
-    def get_alerts(self, user_id: str) -> List[AlertRule]:
+    def get_alerts(self, user_id: str, limit: int = 200, offset: int = 0) -> List[AlertRule]:
         with self._connection() as conn:
-            rows = conn.execute("SELECT * FROM user_alerts WHERE user_id = ? ORDER BY id DESC", (user_id,)).fetchall()
+            rows = conn.execute(
+                "SELECT * FROM user_alerts WHERE user_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
+            ).fetchall()
         return [
             AlertRule(
                 id=row["id"],
@@ -1284,11 +1290,11 @@ class DocumentStore:
             saved_at=row["created_at"],
         )
 
-    def get_bookmarks(self, user_id: str) -> List[BookmarkItem]:
+    def get_bookmarks(self, user_id: str, limit: int = 200, offset: int = 0) -> List[BookmarkItem]:
         with self._connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM user_bookmarks WHERE user_id = ? ORDER BY created_at DESC",
-                (user_id,),
+                "SELECT * FROM user_bookmarks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
             ).fetchall()
         return [
             BookmarkItem(

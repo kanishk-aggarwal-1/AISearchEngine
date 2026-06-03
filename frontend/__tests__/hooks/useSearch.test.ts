@@ -121,7 +121,7 @@ describe("useSearch — runSearch", () => {
       key_takeaways: [], why_it_matters: "", what_changed_last_week: "",
       claim_confidence: 0.8, contradictions: [], sources: [],
       timeline: [], context_id: "ctx-abc", applied_filters: { sort_by: "relevance", source_filter: [], source_type_filter: [] },
-      suggested_queries: [],
+      suggested_queries: [], search_mode: "keyword",
     };
 
     global.fetch = jest.fn().mockResolvedValueOnce({
