@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from backend.app.config import settings
-from backend.app.container import cache, embedding_service, metrics, store, vector_index
+from backend.app.container import cache, embedding_service, metrics, metrics_store, store, vector_index
 
 router = APIRouter()
 
@@ -96,6 +96,25 @@ async def get_metrics() -> JSONResponse:
             **metrics.snapshot(),
             "source_freshness": store.source_freshness_summary(),
             "last_successful_ingestion_at": store.last_successful_ingestion_at(),
+        }
+    )
+
+
+@router.get("/metrics/summary")
+async def get_metrics_summary() -> JSONResponse:
+    """Public, read-only live metrics for the status dashboard. Returns only
+    non-sensitive aggregate numbers — no queries, user IDs, secrets, or keys."""
+    summary = await metrics_store.summary()
+    corpus = store.corpus_stats()
+    return JSONResponse(
+        {
+            **summary,
+            "documents_indexed": corpus["documents_indexed"],
+            "distinct_sources": corpus["distinct_sources"],
+            "last_ingestion_at": store.last_successful_ingestion_at(),
+            "source_freshness": store.source_freshness_summary(),
+            "real_embeddings_enabled": embedding_service.real_embeddings_enabled,
+            "server_time": datetime.now(timezone.utc).isoformat(),
         }
     )
 

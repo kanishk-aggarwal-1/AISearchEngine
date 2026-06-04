@@ -61,6 +61,19 @@ class DocumentStore:
         except Exception:
             return None
 
+    def corpus_stats(self) -> dict:
+        """Non-sensitive counts for the public metrics dashboard:
+        total documents indexed and the number of distinct sources."""
+        try:
+            with self._connection() as conn:
+                documents = conn.execute("SELECT COUNT(*) AS n FROM documents").fetchone()["n"]
+                distinct_sources = conn.execute(
+                    "SELECT COUNT(DISTINCT source) AS n FROM documents"
+                ).fetchone()["n"]
+            return {"documents_indexed": int(documents), "distinct_sources": int(distinct_sources)}
+        except Exception:
+            return {"documents_indexed": 0, "distinct_sources": 0}
+
     @contextmanager
     def _connection(self):
         conn = self._connect()

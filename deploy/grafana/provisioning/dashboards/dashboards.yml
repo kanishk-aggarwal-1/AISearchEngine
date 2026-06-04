@@ -1,0 +1,13 @@
+# Tell Grafana to load dashboard JSON files from the provisioning folder.
+apiVersion: 1
+
+providers:
+  - name: SignalScope
+    orgId: 1
+    folder: SignalScope
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

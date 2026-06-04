@@ -54,6 +54,7 @@ export default function HomePage() {
           {(Object.entries(categoryLabels) as [Category, string][]).map(([slug, label]) => (
             <Link key={slug} href={`/category/${slug}`} className="text-link">{label}</Link>
           ))}
+          <Link href="/status" className="text-link">Status</Link>
         </div>
       </nav>
 

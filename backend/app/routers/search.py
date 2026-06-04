@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from backend.app.config import settings
 from backend.app.container import (
     cache, embedding_service, enricher, explainer,
-    logger, metrics, registry, retriever, store, vector_index,
+    logger, metrics, metrics_store, registry, retriever, store, vector_index,
 )
 from backend.app.models import (
     AppliedFilters,
@@ -91,6 +91,17 @@ def _suggested_queries(payload: SearchRequest) -> List[str]:
     return unique[:4]
 
 
+def _citation_coverage(sources: list) -> float:
+    """Fraction (0..1) of returned sources that carry a citation snippet."""
+    if not sources:
+        return 0.0
+    def _has_citation(s) -> bool:
+        if isinstance(s, dict):
+            return bool((s.get("citation_snippet") or "").strip())
+        return bool((getattr(s, "citation_snippet", "") or "").strip())
+    return sum(1 for s in sources if _has_citation(s)) / len(sources)
+
+
 async def _search_core(payload: SearchRequest, use_cache: bool = True) -> SearchResponse:
     start = time.perf_counter()
     profile = store.get_profile(payload.user_id)
@@ -118,6 +129,12 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             p.setdefault("explanation_provider", "fallback")
             p.setdefault("applied_filters", AppliedFilters().model_dump())
             p.setdefault("suggested_queries", [])
+            await metrics_store.record_search(
+                latency_ms=(time.perf_counter() - start) * 1000,
+                cache_hit=True,
+                citation_coverage=_citation_coverage(p.get("sources", [])),
+                no_result=not p.get("sources"),
+            )
             return SearchResponse.model_validate(p)
 
         cached = store.get_query_cache(cache_key, max_age_minutes=settings.query_cache_minutes)
@@ -128,6 +145,12 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             p.setdefault("applied_filters", AppliedFilters().model_dump())
             p.setdefault("suggested_queries", [])
             await cache.put_query_cache(cache_key, p, settings.query_cache_minutes)
+            await metrics_store.record_search(
+                latency_ms=(time.perf_counter() - start) * 1000,
+                cache_hit=True,
+                citation_coverage=_citation_coverage(p.get("sources", [])),
+                no_result=not p.get("sources"),
+            )
             return SearchResponse.model_validate(p)
 
     metrics.inc("search.cache_miss")
@@ -274,6 +297,12 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
     if not ranked:
         metrics.inc("search.no_result")
     metrics.observe("search.latency", time.perf_counter() - start)
+    await metrics_store.record_search(
+        latency_ms=(time.perf_counter() - start) * 1000,
+        cache_hit=False,
+        citation_coverage=_citation_coverage(ranked),
+        no_result=not ranked,
+    )
     return response
 
 
