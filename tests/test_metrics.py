@@ -63,8 +63,10 @@ class MetricsStoreTests(unittest.TestCase):
         self.assertEqual(s["cache_misses_total"], 2)
         # cache hit rate = 1/3
         self.assertAlmostEqual(s["cache_hit_rate"], 0.3333, places=3)
-        # citation coverage avg = (1.0 + 0.5 + 0.0)/3 = 50%
-        self.assertAlmostEqual(s["citation_coverage_pct"], 50.0, places=1)
+        # citation coverage avg = (1.0 + 0.5) / 2 = 75%
+        # The no-result search (coverage=0.0) is excluded from both numerator
+        # AND denominator — averaging zero-result searches in deflates the metric.
+        self.assertAlmostEqual(s["citation_coverage_pct"], 75.0, places=1)
         # no-result rate = 1/3
         self.assertAlmostEqual(s["no_result_rate"], 0.3333, places=3)
 

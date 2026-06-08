@@ -29,8 +29,23 @@ export function usePersonalization(
   const [deliveryTest, setDeliveryTest] = useState<{ ok: boolean; preview_only?: boolean; status_code?: number } | null>(null);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
 
+  /**
+   * Returns true when the user is signed in.
+   * For mutation callbacks, pass an error message — it will be surfaced via
+   * onError so the user knows why the action was blocked.
+   * For read/refresh callbacks, omit the message to fail silently and clear state.
+   */
+  const requireAuth = useCallback(
+    (errorMsg?: string): boolean => {
+      if (isAuthenticated) return true;
+      if (errorMsg) onError?.(errorMsg);
+      return false;
+    },
+    [isAuthenticated, onError]
+  );
+
   const refreshFollows = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!requireAuth()) {
       setFollowed([]);
       return;
     }
@@ -40,10 +55,10 @@ export function usePersonalization(
       const data = await r.json();
       setFollowed(data.entities || []);
     } catch { /* unauthenticated users get empty list */ }
-  }, [apiFetch, activeUserId, isAuthenticated]);
+  }, [apiFetch, activeUserId, requireAuth]);
 
   const refreshAlerts = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!requireAuth()) {
       setAlerts([]);
       return;
     }
@@ -52,10 +67,10 @@ export function usePersonalization(
       if (!r.ok) return;
       setAlerts((await r.json() as AlertRule[]) || []);
     } catch { /* ignore */ }
-  }, [apiFetch, activeUserId, isAuthenticated]);
+  }, [apiFetch, activeUserId, requireAuth]);
 
   const loadBookmarks = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!requireAuth()) {
       setBookmarks([]);
       return;
     }
@@ -64,10 +79,10 @@ export function usePersonalization(
       if (!r.ok) return;
       setBookmarks((await r.json() as BookmarkItem[]) || []);
     } catch { /* ignore */ }
-  }, [apiFetch, activeUserId, isAuthenticated]);
+  }, [apiFetch, activeUserId, requireAuth]);
 
   const loadDelivery = useCallback(async () => {
-    if (!isAuthenticated) {
+    if (!requireAuth()) {
       setDelivery({ ...defaultDelivery, user_id: activeUserId });
       return;
     }
@@ -76,7 +91,7 @@ export function usePersonalization(
       if (!r.ok) return;
       setDelivery(await r.json() as AlertDeliverySettings);
     } catch { /* ignore */ }
-  }, [apiFetch, activeUserId, isAuthenticated]);
+  }, [apiFetch, activeUserId, requireAuth]);
 
   useEffect(() => {
     refreshFollows();
@@ -87,10 +102,7 @@ export function usePersonalization(
 
   const addFollow = useCallback(async () => {
     if (!followEntity.trim()) return;
-    if (!isAuthenticated) {
-      onError?.("Please sign in before following topics.");
-      return;
-    }
+    if (!requireAuth("Please sign in before following topics.")) return;
     try {
       const r = await apiFetch(`/users/${activeUserId}/follows`, {
         method: "POST",
@@ -103,15 +115,12 @@ export function usePersonalization(
     } catch (err) {
       onError?.((err as Error).message || "Follow action failed");
     }
-  }, [apiFetch, activeUserId, followEntity, isAuthenticated, onError]);
+  }, [apiFetch, activeUserId, followEntity, requireAuth, onError]);
 
   const createAlert = useCallback(async (query: string, categories: Category[]) => {
     const q = (typeof query === "string" ? query : alertQuery).trim();
     if (!q) return;
-    if (!isAuthenticated) {
-      onError?.("Please sign in before creating alerts.");
-      return;
-    }
+    if (!requireAuth("Please sign in before creating alerts.")) return;
     try {
       const r = await apiFetch(`/users/${activeUserId}/alerts`, {
         method: "POST",
@@ -124,13 +133,10 @@ export function usePersonalization(
     } catch (err) {
       onError?.((err as Error).message || "Alert action failed");
     }
-  }, [apiFetch, activeUserId, alertQuery, isAuthenticated, onError, onInfo, refreshAlerts]);
+  }, [apiFetch, activeUserId, alertQuery, requireAuth, onError, onInfo, refreshAlerts]);
 
   const saveDelivery = useCallback(async () => {
-    if (!isAuthenticated) {
-      onError?.("Please sign in before saving delivery settings.");
-      return;
-    }
+    if (!requireAuth("Please sign in before saving delivery settings.")) return;
     try {
       const r = await apiFetch(`/users/${activeUserId}/alert-delivery`, {
         method: "PUT",
@@ -142,13 +148,10 @@ export function usePersonalization(
     } catch (err) {
       onError?.((err as Error).message || "Unable to save delivery settings");
     }
-  }, [apiFetch, activeUserId, delivery, isAuthenticated, onError, onInfo]);
+  }, [apiFetch, activeUserId, delivery, requireAuth, onError, onInfo]);
 
   const testDelivery = useCallback(async () => {
-    if (!isAuthenticated) {
-      onError?.("Please sign in before testing alert delivery.");
-      return;
-    }
+    if (!requireAuth("Please sign in before testing alert delivery.")) return;
     try {
       const r = await apiFetch(`/users/${activeUserId}/alert-delivery/test`, { method: "POST" });
       if (!r.ok) throw new Error("Unable to test delivery");
@@ -156,13 +159,10 @@ export function usePersonalization(
     } catch (err) {
       onError?.((err as Error).message || "Unable to test delivery");
     }
-  }, [apiFetch, activeUserId, isAuthenticated, onError]);
+  }, [apiFetch, activeUserId, requireAuth, onError]);
 
   const addBookmark = useCallback(async (source: SourceDoc) => {
-    if (!isAuthenticated) {
-      onError?.("Please sign in before saving bookmarks.");
-      return;
-    }
+    if (!requireAuth("Please sign in before saving bookmarks.")) return;
     try {
       const r = await apiFetch(`/users/${activeUserId}/bookmarks`, {
         method: "POST",
@@ -173,15 +173,15 @@ export function usePersonalization(
     } catch (err) {
       onError?.((err as Error).message || "Unable to save bookmark");
     }
-  }, [apiFetch, activeUserId, isAuthenticated, onError, loadBookmarks]);
+  }, [apiFetch, activeUserId, requireAuth, onError, loadBookmarks]);
 
   const removeBookmark = useCallback(async (bookmarkId: number) => {
-    if (!isAuthenticated) return;
+    if (!requireAuth()) return;
     try {
       const r = await apiFetch(`/users/${activeUserId}/bookmarks/${bookmarkId}`, { method: "DELETE" });
       if (r.ok) await loadBookmarks();
     } catch { /* ignore */ }
-  }, [apiFetch, activeUserId, isAuthenticated, loadBookmarks]);
+  }, [apiFetch, activeUserId, requireAuth, loadBookmarks]);
 
   return {
     followEntity, setFollowEntity, followed,

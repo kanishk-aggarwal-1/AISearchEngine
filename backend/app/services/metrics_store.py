@@ -51,6 +51,14 @@ class MetricsStore:
         self._minute_count: dict[int, int] = defaultdict(int)
         self._minute_lat_sum: dict[int, float] = defaultdict(float)
         self._minute_lat_cnt: dict[int, int] = defaultdict(int)
+        # ── summary cache ───────────────────────────────────────────────────
+        # Avoid firing a 97-command Redis pipeline on every 5-second dashboard
+        # poll.  We cache the assembled result for 2 s; within that window all
+        # concurrent pollers share one pipeline execution.
+        self._summary_cache: dict | None = None
+        self._summary_cache_at: float = 0.0
+        _SUMMARY_CACHE_TTL_S = 2.0
+        self._summary_cache_ttl = _SUMMARY_CACHE_TTL_S
 
     # ── key helpers ─────────────────────────────────────────────────────────
     def _k(self, name: str) -> str:
@@ -84,8 +92,12 @@ class MetricsStore:
                 pipe = r.pipeline()
                 pipe.incr(self._k("searches_total"))
                 pipe.incr(self._k("cache_hits_total" if cache_hit else "cache_misses_total"))
-                pipe.incrbyfloat(self._k("citation_sum"), citation_coverage)
-                pipe.incr(self._k("citation_n"))
+                # Only count citation coverage for searches that actually returned
+                # sources.  Including zero-result searches (coverage = 0.0) in the
+                # denominator would silently deflate the reported average.
+                if not no_result:
+                    pipe.incrbyfloat(self._k("citation_sum"), citation_coverage)
+                    pipe.incr(self._k("citation_n"))
                 if no_result:
                     pipe.incr(self._k("no_result_total"))
                 # latency samples (capped list)
@@ -109,8 +121,9 @@ class MetricsStore:
         # ── in-process fallback ─────────────────────────────────────────────
         self._counters["searches_total"] += 1
         self._counters["cache_hits_total" if cache_hit else "cache_misses_total"] += 1
-        self._counters["citation_sum"] += citation_coverage
-        self._counters["citation_n"] += 1
+        if not no_result:
+            self._counters["citation_sum"] += citation_coverage
+            self._counters["citation_n"] += 1
         if no_result:
             self._counters["no_result_total"] += 1
         self._latency.append(latency_ms)
@@ -120,17 +133,32 @@ class MetricsStore:
 
     # ── reading ───────────────────────────────────────────────────────────────
     async def summary(self) -> dict:
-        """Return live aggregate metrics. Pure reads — never mutates counters."""
+        """Return live aggregate metrics. Pure reads — never mutates counters.
+
+        The result is cached in-process for 2 s so that N concurrent dashboard
+        pollers share one Redis pipeline execution instead of each firing 97
+        commands independently.
+        """
+        now = time.time()
+        if self._summary_cache is not None and (now - self._summary_cache_at) < self._summary_cache_ttl:
+            return self._summary_cache
+
         minute = self._now_minute()
         recent_minutes = [minute - i for i in range(_SERIES_MINUTES - 1, -1, -1)]
         r = self._redis
         if r is not None:
             try:
-                return await self._summary_redis(r, recent_minutes)
+                result = await self._summary_redis(r, recent_minutes)
+                self._summary_cache = result
+                self._summary_cache_at = now
+                return result
             except Exception as exc:  # pragma: no cover
                 if self.logger:
                     self.logger.warning("metrics_summary_failed error=%s — using in-process", exc)
-        return self._summary_inprocess(recent_minutes)
+        result = self._summary_inprocess(recent_minutes)
+        self._summary_cache = result
+        self._summary_cache_at = now
+        return result
 
     async def _summary_redis(self, r, recent_minutes: list[int]) -> dict:
         pipe = r.pipeline()

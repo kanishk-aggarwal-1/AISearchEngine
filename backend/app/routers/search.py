@@ -92,14 +92,17 @@ def _suggested_queries(payload: SearchRequest) -> List[str]:
 
 
 def _citation_coverage(sources: list) -> float:
-    """Fraction (0..1) of returned sources that carry a citation snippet."""
+    """Fraction (0..1) of returned SourceDoc objects that carry a citation snippet.
+
+    Always called with a list of SourceDoc models (either from a live search or
+    after SearchResponse.model_validate on a cached payload) so no isinstance
+    branching is needed.
+    """
     if not sources:
         return 0.0
-    def _has_citation(s) -> bool:
-        if isinstance(s, dict):
-            return bool((s.get("citation_snippet") or "").strip())
-        return bool((getattr(s, "citation_snippet", "") or "").strip())
-    return sum(1 for s in sources if _has_citation(s)) / len(sources)
+    return sum(
+        1 for s in sources if bool((getattr(s, "citation_snippet", "") or "").strip())
+    ) / len(sources)
 
 
 async def _search_core(payload: SearchRequest, use_cache: bool = True) -> SearchResponse:
@@ -129,13 +132,15 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             p.setdefault("explanation_provider", "fallback")
             p.setdefault("applied_filters", AppliedFilters().model_dump())
             p.setdefault("suggested_queries", [])
+            # Validate first so _citation_coverage always receives SourceDoc objects.
+            response = SearchResponse.model_validate(p)
             await metrics_store.record_search(
                 latency_ms=(time.perf_counter() - start) * 1000,
                 cache_hit=True,
-                citation_coverage=_citation_coverage(p.get("sources", [])),
-                no_result=not p.get("sources"),
+                citation_coverage=_citation_coverage(response.sources),
+                no_result=not response.sources,
             )
-            return SearchResponse.model_validate(p)
+            return response
 
         cached = store.get_query_cache(cache_key, max_age_minutes=settings.query_cache_minutes)
         if cached:
@@ -145,13 +150,15 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             p.setdefault("applied_filters", AppliedFilters().model_dump())
             p.setdefault("suggested_queries", [])
             await cache.put_query_cache(cache_key, p, settings.query_cache_minutes)
+            # Validate first so _citation_coverage always receives SourceDoc objects.
+            response = SearchResponse.model_validate(p)
             await metrics_store.record_search(
                 latency_ms=(time.perf_counter() - start) * 1000,
                 cache_hit=True,
-                citation_coverage=_citation_coverage(p.get("sources", [])),
-                no_result=not p.get("sources"),
+                citation_coverage=_citation_coverage(response.sources),
+                no_result=not response.sources,
             )
-            return SearchResponse.model_validate(p)
+            return response
 
     metrics.inc("search.cache_miss")
 

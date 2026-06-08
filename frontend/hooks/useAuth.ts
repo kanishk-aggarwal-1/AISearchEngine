@@ -82,8 +82,6 @@ export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
         if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(authForm.password)) {
           throw new Error("Password must include at least one uppercase letter, one lowercase letter, and one number.");
         }
-      }
-      if (isRegister) {
         const r = await fetch(`${apiUrl}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

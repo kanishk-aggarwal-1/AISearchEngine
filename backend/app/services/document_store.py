@@ -648,26 +648,33 @@ class DocumentStore:
         now_iso = datetime.now(timezone.utc).isoformat()
         user_id = f"user_{secrets.token_hex(6)}"
         password_hash = self._hash_password(password)
-        with self._connection() as conn:
-            existing = conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
-            if existing:
-                raise ValueError("An account with this email already exists")
-            existing_count = conn.execute("SELECT COUNT(*) AS count FROM auth_users").fetchone()["count"]
-            is_admin = 1 if existing_count == 0 else 0
-            conn.execute(
-                """
-                INSERT INTO auth_users (user_id, email, password_hash, display_name, created_at, is_admin, email_verified)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (user_id, normalized_email, password_hash, display_name.strip(), now_iso, is_admin, 0),
-            )
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO user_profiles (user_id, preferred_categories_json, explanation_mode, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (user_id, json.dumps([]), "beginner", now_iso),
-            )
+        try:
+            with self._connection() as conn:
+                existing = conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
+                if existing:
+                    raise ValueError("An account with this email already exists")
+                existing_count = conn.execute("SELECT COUNT(*) AS count FROM auth_users").fetchone()["count"]
+                is_admin = 1 if existing_count == 0 else 0
+                conn.execute(
+                    """
+                    INSERT INTO auth_users (user_id, email, password_hash, display_name, created_at, is_admin, email_verified)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (user_id, normalized_email, password_hash, display_name.strip(), now_iso, is_admin, 0),
+                )
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO user_profiles (user_id, preferred_categories_json, explanation_mode, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (user_id, json.dumps([]), "beginner", now_iso),
+                )
+        except sqlite3.IntegrityError:
+            # A concurrent registration with the same email beat us to the INSERT.
+            # Re-raise as a friendly ValueError so auth_register surfaces a 400
+            # with a clean message instead of leaking the raw SQLite error text
+            # ("UNIQUE constraint failed: auth_users.email").
+            raise ValueError("An account with this email already exists")
         return AuthUser(
             user_id=user_id,
             email=normalized_email,
