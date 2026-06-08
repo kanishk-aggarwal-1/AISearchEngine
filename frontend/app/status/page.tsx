@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getApiBase } from "../../lib/api";
 
 interface SeriesPoint {
   minute: number;
@@ -84,12 +85,9 @@ function MetricCard({ label, value, sub, accent }: {
 }
 
 export default function StatusPage() {
-  const apiBase = useMemo(() => {
-    return process.env.NEXT_PUBLIC_API_URL
-      || (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname)
-        ? "/api"
-        : "http://127.0.0.1:8000");
-  }, []);
+  // Metrics endpoints are unversioned (no /v1) — pass versioned=false.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const apiBase = useMemo(() => getApiBase(false), []);
 
   const [data, setData] = useState<MetricsSummary | null>(null);
   const [error, setError] = useState("");

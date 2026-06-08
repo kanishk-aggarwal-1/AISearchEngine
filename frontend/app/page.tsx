@@ -20,6 +20,7 @@ import { usePersonalization } from "../hooks/usePersonalization";
 import { useResearch } from "../hooks/useResearch";
 import { useSearch } from "../hooks/useSearch";
 import { useSports } from "../hooks/useSports";
+import { getApiBase } from "../lib/api";
 import type { Category } from "../types/api";
 
 const categoryLabels: Record<Category, string> = { tech: "Tech", research: "Research", sports: "Sports", general: "General" };
@@ -29,12 +30,8 @@ export default function HomePage() {
   const [info, setInfo] = useState("");
   const [userId, setUserId] = useState("default");
 
-  const apiUrl = useMemo(() => {
-    const base = process.env.NEXT_PUBLIC_API_URL
-      || (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname) ? "/api" : "http://127.0.0.1:8000");
-    // All product endpoints live under /v1 — health/metrics stay at root
-    return `${base}/v1`;
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const apiUrl = useMemo(() => getApiBase(), []);
 
   const auth = useAuth(apiUrl, { onError: setError, onInfo: setInfo });
   const activeUserId = auth.session?.user?.user_id || userId;

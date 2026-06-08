@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
@@ -103,16 +104,24 @@ async def get_metrics() -> JSONResponse:
 @router.get("/metrics/summary")
 async def get_metrics_summary() -> JSONResponse:
     """Public, read-only live metrics for the status dashboard. Returns only
-    non-sensitive aggregate numbers — no queries, user IDs, secrets, or keys."""
-    summary = await metrics_store.summary()
-    corpus = store.corpus_stats()
+    non-sensitive aggregate numbers — no queries, user IDs, secrets, or keys.
+
+    All synchronous SQLite calls are offloaded to a thread-pool executor so
+    they do not block the async event loop under concurrent load.
+    """
+    summary, corpus, last_ingestion, freshness = await asyncio.gather(
+        metrics_store.summary(),
+        asyncio.to_thread(store.corpus_stats),
+        asyncio.to_thread(store.last_successful_ingestion_at),
+        asyncio.to_thread(store.source_freshness_summary),
+    )
     return JSONResponse(
         {
             **summary,
             "documents_indexed": corpus["documents_indexed"],
             "distinct_sources": corpus["distinct_sources"],
-            "last_ingestion_at": store.last_successful_ingestion_at(),
-            "source_freshness": store.source_freshness_summary(),
+            "last_ingestion_at": last_ingestion,
+            "source_freshness": freshness,
             "real_embeddings_enabled": embedding_service.real_embeddings_enabled,
             "server_time": datetime.now(timezone.utc).isoformat(),
         }

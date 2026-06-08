@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState } from "react";
+import { getApiBase } from "../../../lib/api";
 
 const labels: Record<string, string> = { tech: "Tech", research: "Research", sports: "Sports", general: "General" };
 
@@ -15,11 +16,8 @@ interface CategoryData {
 // Next.js 15: params is always a Promise — unwrap with React.use()
 export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
-  const apiUrl = useMemo(() => {
-    const base = process.env.NEXT_PUBLIC_API_URL
-      || (typeof window !== "undefined" && !["localhost", "127.0.0.1"].includes(window.location.hostname) ? "/api" : "http://127.0.0.1:8000");
-    return `${base}/v1`;
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const apiUrl = useMemo(() => getApiBase(), []);
   const [data, setData] = useState<CategoryData | null>(null);
   const [error, setError] = useState("");
 
