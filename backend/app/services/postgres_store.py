@@ -75,6 +75,9 @@ class PostgresDocumentStore(DocumentStore):
         user_id = f"user_{self.title_hash(normalized_email + now_iso)[:12]}"
         password_hash = self._hash_password(password)
         with self._connection() as conn:
+            existing = conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
+            if existing:
+                raise ValueError("An account with this email already exists")
             existing_count = conn.execute("SELECT COUNT(*) AS count FROM auth_users").fetchone()["count"]
             is_admin = 1 if existing_count == 0 else 0
             conn.execute(

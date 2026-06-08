@@ -649,6 +649,9 @@ class DocumentStore:
         user_id = f"user_{secrets.token_hex(6)}"
         password_hash = self._hash_password(password)
         with self._connection() as conn:
+            existing = conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
+            if existing:
+                raise ValueError("An account with this email already exists")
             existing_count = conn.execute("SELECT COUNT(*) AS count FROM auth_users").fetchone()["count"]
             is_admin = 1 if existing_count == 0 else 0
             conn.execute(
@@ -1444,4 +1447,3 @@ class DocumentStore:
             return False
         digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000).hex()
         return secrets.compare_digest(digest, expected)
-
