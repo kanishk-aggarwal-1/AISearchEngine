@@ -674,7 +674,7 @@ class DocumentStore:
             # Re-raise as a friendly ValueError so auth_register surfaces a 400
             # with a clean message instead of leaking the raw SQLite error text
             # ("UNIQUE constraint failed: auth_users.email").
-            raise ValueError("An account with this email already exists")
+            raise ValueError("An account with this email already exists") from None
         return AuthUser(
             user_id=user_id,
             email=normalized_email,
