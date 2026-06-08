@@ -368,8 +368,16 @@ button:disabled {
 
 .headline-list { display: grid; gap: 0.55rem; }
 
+.headline-stack {
+  display: grid;
+  gap: 0.45rem;
+}
+
 .headline-item {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   text-align: left;
   background: var(--surface-md);
   color: var(--text);
@@ -388,6 +396,12 @@ button:disabled {
 }
 
 .headline-item h4 { font-size: 0.84rem; line-height: 1.35; margin-bottom: 0.3rem; }
+
+.headline-item .source-meta,
+.headline-item h4,
+.headline-item .muted {
+  width: 100%;
+}
 
 .headline-item .muted {
   font-size: 0.76rem;
