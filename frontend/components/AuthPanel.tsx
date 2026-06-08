@@ -64,7 +64,10 @@ export default function AuthPanel({
           <input value={authForm.email} onChange={(e) => setAuthForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" />
           <input type="password" value={authForm.password} onChange={(e) => setAuthForm((p) => ({ ...p, password: e.target.value }))} placeholder="Password" />
           {authMode === "register" && (
-            <input value={authForm.display_name} onChange={(e) => setAuthForm((p) => ({ ...p, display_name: e.target.value }))} placeholder="Display name" />
+            <>
+              <input value={authForm.display_name} onChange={(e) => setAuthForm((p) => ({ ...p, display_name: e.target.value }))} placeholder="Display name" />
+              <p className="muted auth-hint">Use at least 10 characters with uppercase, lowercase, and a number.</p>
+            </>
           )}
           <button type="button" onClick={submitAuth}>{authMode === "register" ? "Create account" : "Sign in"}</button>
         </>
@@ -79,6 +82,7 @@ export default function AuthPanel({
           <>
             <input value={resetToken} onChange={(e) => setResetToken(e.target.value)} placeholder="Paste reset token or use preview" />
             <input type="password" value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder="New password" />
+            <p className="muted auth-hint">Reset passwords follow the same rule: 10+ chars, uppercase, lowercase, and a number.</p>
             <button type="button" className="mini-button" onClick={confirmPasswordReset}>Confirm reset</button>
           </>
         )}

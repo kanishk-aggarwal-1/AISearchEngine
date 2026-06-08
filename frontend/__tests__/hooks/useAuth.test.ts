@@ -68,6 +68,37 @@ describe("useAuth — form state", () => {
     act(() => { result.current.setAuthForm((p) => ({ ...p, password: "Newpass1" })); });
     expect(result.current.authForm.password).toBe("Newpass1");
   });
+
+  it("surfaces password complexity errors during registration", async () => {
+    const onError = jest.fn();
+    const { result } = renderHook(() => useAuth(API_URL, { onError }));
+    act(() => {
+      result.current.setAuthMode("register");
+      result.current.setAuthForm({ email: "new@example.com", password: "short", display_name: "Alice" });
+    });
+
+    await act(async () => { await result.current.submitAuth(); });
+
+    expect(onError).toHaveBeenCalledWith("Password must be at least 10 characters long.");
+  });
+
+  it("extracts backend validation messages from register failures", async () => {
+    const onError = jest.fn();
+    const { result } = renderHook(() => useAuth(API_URL, { onError }));
+    act(() => {
+      result.current.setAuthMode("register");
+      result.current.setAuthForm({ email: "new@example.com", password: "ValidPass123", display_name: "Alice" });
+    });
+
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: false,
+      json: async () => ({ detail: [{ loc: ["body", "email"], msg: "value is not a valid email address" }] }),
+    } as Response);
+
+    await act(async () => { await result.current.submitAuth(); });
+
+    expect(onError).toHaveBeenCalledWith("email: value is not a valid email address");
+  });
 });
 
 describe("useAuth — logout", () => {

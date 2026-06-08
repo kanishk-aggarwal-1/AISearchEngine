@@ -69,6 +69,7 @@ describe("AuthPanel — logged out", () => {
   it("shows display_name input in register mode", () => {
     renderPanel({ authMode: "register" });
     expect(screen.getByPlaceholderText("Display name")).toBeInTheDocument();
+    expect(screen.getByText(/uppercase, lowercase, and a number/i)).toBeInTheDocument();
   });
 
   it("shows 'Sign in' CTA in login mode", () => {
@@ -112,6 +113,7 @@ describe("AuthPanel — logged out", () => {
     renderPanel({ resetPreview: { ok: true, message: "", token_preview: "tok123", email_sent: false, delivery_mode: "preview", recipient: "" } });
     expect(screen.getByPlaceholderText(/paste reset token/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /confirm reset/i })).toBeInTheDocument();
+    expect(screen.getByText(/reset passwords follow the same rule/i)).toBeInTheDocument();
   });
 });
 

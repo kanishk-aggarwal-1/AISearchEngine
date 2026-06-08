@@ -12,6 +12,20 @@ import type {
 type Callbacks = { onError?: (msg: string) => void; onInfo?: (msg: string) => void };
 type ApiFetch = ReturnType<typeof createFetch>;
 
+function extractErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== "object") return fallback;
+  const detail = (payload as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    const first = detail[0] as { msg?: string; loc?: Array<string | number> } | undefined;
+    if (first?.msg) {
+      const field = Array.isArray(first.loc) ? String(first.loc[first.loc.length - 1] || "") : "";
+      return field ? `${field}: ${first.msg}` : first.msg;
+    }
+  }
+  return fallback;
+}
+
 export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -58,14 +72,26 @@ export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
     try {
       const isRegister = authMode === "register";
       if (isRegister) {
+        const trimmedName = authForm.display_name.trim();
+        if (trimmedName.length < 2) {
+          throw new Error("Display name must be at least 2 characters long.");
+        }
+        if (authForm.password.length < 10) {
+          throw new Error("Password must be at least 10 characters long.");
+        }
+        if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(authForm.password)) {
+          throw new Error("Password must include at least one uppercase letter, one lowercase letter, and one number.");
+        }
+      }
+      if (isRegister) {
         const r = await fetch(`${apiUrl}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(authForm),
         });
         if (!r.ok) {
-          const p = await r.json().catch(() => ({})) as { detail?: string };
-          throw new Error(p.detail || "Unable to register");
+          const p = await r.json().catch(() => ({}));
+          throw new Error(extractErrorMessage(p, "Unable to register"));
         }
       }
       const r = await fetch(`${apiUrl}/auth/login`, {
@@ -74,11 +100,11 @@ export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
         body: JSON.stringify({ email: authForm.email, password: authForm.password }),
       });
       if (!r.ok) {
-        const p = await r.json().catch(() => ({})) as { detail?: string };
-        throw new Error(p.detail || "Unable to sign in");
+        const p = await r.json().catch(() => ({}));
+        throw new Error(extractErrorMessage(p, "Unable to sign in"));
       }
       persistSession(await r.json() as AuthSession);
-      setAuthForm((prev) => ({ ...prev, password: "" }));
+      setAuthForm((prev) => ({ ...prev, password: "", display_name: prev.display_name.trim() }));
       onInfo?.(isRegister ? "Account created and signed in." : "Signed in successfully.");
     } catch (err) {
       onError?.((err as Error).message || "Authentication failed");

@@ -41,7 +41,7 @@ export default function HomePage() {
 
   const headlines = useHeadlines(apiUrl, 7, { onError: setError });
   const search = useSearch(apiUrl, activeUserId, auth.apiFetch, { onError: setError, onInfo: setInfo });
-  const personalization = usePersonalization(apiUrl, activeUserId, auth.apiFetch, { onError: setError, onInfo: setInfo });
+  const personalization = usePersonalization(apiUrl, activeUserId, Boolean(auth.session?.token), auth.apiFetch, { onError: setError, onInfo: setInfo });
   const sports = useSports(apiUrl);
   const research = useResearch(apiUrl);
   const admin = useAdmin(auth.session?.user?.is_admin, auth.apiFetch, { onError: setError, onInfo: setInfo });
