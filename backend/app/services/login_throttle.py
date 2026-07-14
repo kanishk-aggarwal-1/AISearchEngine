@@ -28,13 +28,16 @@ class LoginThrottle:
         """True when the account has too many recent failures. Read-only — never
         increments the counter (so checking does not lock out a legit user)."""
         if self.cache.using_redis:
-            return await self.cache.get_int(self._key(email)) >= self.max_attempts
+            count = await self.cache.get_int(self._key(email))
+            if count is not None:
+                return count >= self.max_attempts
         return self._recent_failures(email) >= self.max_attempts
 
     async def record_failure(self, email: str) -> None:
         if self.cache.using_redis:
-            await self.cache.incr(self._key(email), ttl_seconds=self.window_seconds)
-            return
+            count = await self.cache.incr(self._key(email), ttl_seconds=self.window_seconds)
+            if count is not None:
+                return
         now = time.time()
         bucket = self._live_bucket(email, now)
         bucket.append(now)

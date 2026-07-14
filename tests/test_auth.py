@@ -53,8 +53,8 @@ class TestAuthFlow(unittest.TestCase):
             self.assertEqual(user.email, "alice@example.com")
             self.assertEqual(user.display_name, "Alice")
             self.assertFalse(user.email_verified)
-            # First registered user becomes admin (initial setup by design)
-            self.assertTrue(user.is_admin)
+            # Admin access is explicit; first-user races must not grant privileges.
+            self.assertFalse(user.is_admin)
 
     def test_second_user_is_not_admin(self):
         with tempfile.TemporaryDirectory() as tmpdir:

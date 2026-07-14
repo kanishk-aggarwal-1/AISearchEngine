@@ -61,6 +61,17 @@ class Settings(BaseSettings):
     # within the lockout window (seconds).
     login_max_attempts: int = 5
     login_lockout_seconds: int = 900
+    bootstrap_admin_email: str = ""
+    google_oauth_client_id: str = ""
+    webauthn_rp_id: str = "localhost"
+    webauthn_rp_name: str = "SignalScope AI"
+    webauthn_origin: str = "http://localhost:3000"
+    webhook_allowed_hosts: str = ""
+    webhook_require_https: bool = True
+    context_retention_days: int = 30
+    query_cache_retention_days: int = 7
+    scheduler_lock_seconds: int = 900
+    webhook_delivery_attempts: int = 3
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

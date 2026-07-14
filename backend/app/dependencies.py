@@ -20,6 +20,30 @@ def current_user(request: Request) -> AuthUser:
     return user
 
 
+def optional_user(request: Request) -> AuthUser | None:
+    """Return the authenticated caller when a bearer token is present."""
+    auth = request.headers.get("Authorization", "").strip()
+    if not auth:
+        return None
+    return current_user(request)
+
+
+def resolve_search_user(request: Request, requested_user_id: str) -> str:
+    """Bind registered-user searches to the authenticated session.
+
+    Anonymous searches share a deliberately non-account identity. Their context
+    IDs are random capabilities, so they cannot address registered-user data.
+    """
+    caller = optional_user(request)
+    if caller:
+        if requested_user_id not in {"", "default", caller.user_id}:
+            raise HTTPException(status_code=403, detail="Search user does not match authenticated session")
+        return caller.user_id
+    if requested_user_id.startswith("user_"):
+        raise HTTPException(status_code=401, detail="Authentication required for this user")
+    return "anonymous"
+
+
 def current_admin(request: Request) -> AuthUser:
     user = current_user(request)
     if not user.is_admin:

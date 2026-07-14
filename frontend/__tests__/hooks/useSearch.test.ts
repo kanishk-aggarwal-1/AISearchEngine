@@ -124,13 +124,14 @@ describe("useSearch — runSearch", () => {
       suggested_queries: [], search_mode: "keyword",
     };
 
-    global.fetch = jest.fn().mockResolvedValueOnce({
+    const searchResponse = {
       ok: true,
       json: async () => mockResult,
-    } as Response);
+    } as Response;
 
-    // Mock apiFetch for loadHistory
-    const apiFetch = jest.fn().mockResolvedValue({ ok: false });
+    const apiFetch = jest.fn()
+      .mockResolvedValueOnce(searchResponse)
+      .mockResolvedValue({ ok: false });
 
     const { result } = renderHook(() => useSearch(API_URL, "user-1", apiFetch as ReturnType<typeof createFetch>));
     const fakeEvent = { preventDefault: jest.fn() } as unknown as React.FormEvent;
@@ -142,9 +143,9 @@ describe("useSearch — runSearch", () => {
   });
 
   it("sets loading to false and fires onError on network failure", async () => {
-    global.fetch = jest.fn().mockRejectedValueOnce(new Error("Network down"));
+    const failingFetch = jest.fn().mockRejectedValueOnce(new Error("Network down"));
     const onError = jest.fn();
-    const { result } = renderHook(() => useSearch(API_URL, "default", mockApiFetch, { onError }));
+    const { result } = renderHook(() => useSearch(API_URL, "default", failingFetch as ReturnType<typeof createFetch>, { onError }));
     const fakeEvent = { preventDefault: jest.fn() } as unknown as React.FormEvent;
 
     await act(async () => { await result.current.runSearch(fakeEvent); });

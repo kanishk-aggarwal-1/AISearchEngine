@@ -162,7 +162,8 @@ async def _is_rate_limited(client_ip: str) -> bool:
     """
     if cache.using_redis:
         count = await cache.incr(f"rl:{client_ip}", ttl_seconds=60)
-        return count > settings.rate_limit_per_minute
+        if count is not None:
+            return count > settings.rate_limit_per_minute
 
     # In-process fallback — single-worker only
     now = time.time()
@@ -195,5 +196,4 @@ async def security_middleware(request: Request, call_next):
     for header, value in _security_headers().items():
         response.headers[header] = value
     return response
-
 

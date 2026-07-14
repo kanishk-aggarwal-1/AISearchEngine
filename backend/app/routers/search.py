@@ -1,10 +1,14 @@
-import hashlib
+import asyncio
 import json
+import re
 import time
+import uuid
+from urllib.parse import urlparse
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from backend.app.config import settings
 from backend.app.container import (
@@ -14,12 +18,16 @@ from backend.app.container import (
 from backend.app.models import (
     AppliedFilters,
     CompareRequest,
+    ConversationCreateRequest,
+    ConversationMessageRequest,
     FollowUpRequest,
     FollowUpResponse,
     SearchRequest,
+    SearchFeedbackRequest,
     SearchResponse,
     SourceDoc,
 )
+from backend.app.dependencies import current_user, resolve_search_user
 
 router = APIRouter()
 
@@ -43,7 +51,44 @@ def _apply_search_filters(docs: List[SourceDoc], payload: SearchRequest) -> List
     if payload.source_type_filter:
         allowed = set(payload.source_type_filter)
         filtered = [doc for doc in filtered if doc.source_type in allowed]
+    if payload.domain_filter:
+        domains = {item.lower().removeprefix("www.") for item in payload.domain_filter if item.strip()}
+        filtered = [
+            doc for doc in filtered
+            if urlparse(doc.url).netloc.lower().removeprefix("www.") in domains
+        ]
+    if payload.author_filter:
+        wanted_authors = {item.lower() for item in payload.author_filter if item.strip()}
+        filtered = [
+            doc for doc in filtered
+            if doc.research_metadata and wanted_authors.intersection(
+                author.lower() for author in doc.research_metadata.authors
+            )
+        ]
+    if payload.min_credibility is not None:
+        filtered = [doc for doc in filtered if doc.credibility_score >= payload.min_credibility]
+    if payload.language_filter:
+        languages = {item.lower() for item in payload.language_filter}
+        filtered = [doc for doc in filtered if doc.language.lower() in languages]
+    if payload.region_filter:
+        regions = {item.lower() for item in payload.region_filter}
+        filtered = [doc for doc in filtered if doc.region.lower() in regions]
+    if payload.date_from:
+        start = payload.date_from if payload.date_from.tzinfo else payload.date_from.replace(tzinfo=timezone.utc)
+        filtered = [doc for doc in filtered if doc.published_at and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)) >= start]
+    if payload.date_to:
+        end = payload.date_to if payload.date_to.tzinfo else payload.date_to.replace(tzinfo=timezone.utc)
+        filtered = [doc for doc in filtered if doc.published_at and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)) <= end]
     return filtered
+
+
+def _citation_warnings(explanation: str) -> List[str]:
+    warnings = []
+    for sentence in re.split(r"(?<=[.!?])\s+", explanation):
+        clean = sentence.strip()
+        if len(clean.split()) >= 8 and not re.search(r"\[\d+\]", clean):
+            warnings.append(f"Uncited claim: {clean[:180]}")
+    return warnings[:5]
 
 
 def _sort_docs(docs: List[SourceDoc], sort_by: str) -> List[SourceDoc]:
@@ -107,8 +152,10 @@ def _citation_coverage(sources: list) -> float:
 
 async def _search_core(payload: SearchRequest, use_cache: bool = True) -> SearchResponse:
     start = time.perf_counter()
-    profile = store.get_profile(payload.user_id)
-    follows = store.get_follows(payload.user_id)
+    profile, follows = await asyncio.gather(
+        asyncio.to_thread(store.get_profile, payload.user_id),
+        asyncio.to_thread(store.get_follows, payload.user_id),
+    )
     mode = payload.explanation_mode or profile.explanation_mode
 
     categories = payload.categories
@@ -122,6 +169,10 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         f"::{payload.top_k}::{mode}::{payload.explanation_format}::{payload.compare_against or ''}"
         f"::{payload.recency_days or 0}::{payload.sort_by}::{','.join(sorted(payload.source_filter))}"
         f"::{','.join(sorted(payload.source_type_filter))}"
+        f"::{','.join(sorted(payload.domain_filter))}::{','.join(sorted(payload.author_filter))}"
+        f"::{payload.min_credibility if payload.min_credibility is not None else ''}"
+        f"::{','.join(sorted(payload.language_filter))}::{','.join(sorted(payload.region_filter))}"
+        f"::{payload.date_from or ''}::{payload.date_to or ''}"
     )
 
     if use_cache:
@@ -142,7 +193,9 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             )
             return response
 
-        cached = store.get_query_cache(cache_key, max_age_minutes=settings.query_cache_minutes)
+        cached = await asyncio.to_thread(
+            store.get_query_cache, cache_key, settings.query_cache_minutes
+        )
         if cached:
             metrics.inc("search.cache_hit.sqlite")
             p = json.loads(cached)
@@ -166,7 +219,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
     live_docs = await registry.gather(search_query, categories, settings.max_fetch_per_source)
     live_docs = enricher.enrich(search_query, live_docs)
     if live_docs:
-        store.upsert_documents(live_docs)
+        await asyncio.to_thread(store.upsert_documents, live_docs)
 
     query_embedding: List[float] = []
     try:
@@ -182,7 +235,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         logger.warning("vector_search_pipeline_failed error=%s", exc)
         metrics.inc("vector.search.error")
 
-    candidate_docs = store.all_recent_documents(categories, limit=180)
+    candidate_docs = await asyncio.to_thread(store.all_recent_documents, categories, 180)
     merged_docs: dict[str, SourceDoc] = {}
     for doc in [*candidate_docs, *vector_docs, *live_docs]:
         key = store.canonicalize_url(doc.url, doc.source, doc.title)
@@ -190,10 +243,15 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             merged_docs[key] = doc
 
     chunk_hits_by_doc = {}
-    chunk_candidates = store.search_chunks(
-        search_query, categories, limit=max(settings.chunk_top_k * 4, payload.top_k * 8)
+    chunk_candidates, cached_chunk_embeddings = await asyncio.gather(
+        asyncio.to_thread(
+            store.search_chunks,
+            search_query,
+            categories,
+            max(settings.chunk_top_k * 4, payload.top_k * 8),
+        ),
+        asyncio.to_thread(store.chunk_embedding_map, categories, 800),
     )
-    cached_chunk_embeddings = store.chunk_embedding_map(categories, limit=800)
     chunk_rank_started = time.perf_counter()
     ranked_chunks, new_chunk_embeddings, query_embedding = await retriever.rank_chunks(
         search_query,
@@ -210,7 +268,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
     docs = enricher.enrich(search_query, list(merged_docs.values()))
     docs = _apply_search_filters(docs, payload)
 
-    cached_embeddings = store.embedding_map(categories, limit=300)
+    cached_embeddings = await asyncio.to_thread(store.embedding_map, categories, 300)
     ranked, new_embeddings, query_embedding = await retriever.rank(
         search_query,
         docs,
@@ -234,7 +292,9 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         metrics.inc("vector.upsert.error")
 
     if live_docs:
-        store.upsert_documents(live_docs, new_embeddings, new_chunk_embeddings)
+        await asyncio.to_thread(
+            store.upsert_documents, live_docs, new_embeddings, new_chunk_embeddings
+        )
 
     contradictions = enricher.contradictions(ranked)
     claim_confidence = enricher.claim_confidence(ranked, contradictions)
@@ -264,15 +324,23 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
                 source_filter=payload.source_filter,
                 source_type_filter=payload.source_type_filter,
                 sort_by=payload.sort_by,
+                domain_filter=payload.domain_filter,
+                author_filter=payload.author_filter,
+                min_credibility=payload.min_credibility,
+                language_filter=payload.language_filter,
+                region_filter=payload.region_filter,
+                date_from=payload.date_from,
+                date_to=payload.date_to,
             ),
             use_cache=False,
         )
         comparison = enricher.compare(payload.query, ranked, payload.compare_against, other.sources)
 
-    context_key = f"{payload.user_id}:{payload.query}:{','.join(categories)}"
-    context_id = hashlib.md5(context_key.encode("utf-8")).hexdigest()[:16]
-    store.save_context(context_id, payload.user_id, payload.query, ranked)
-    store.add_search_history(payload.user_id, payload.query, categories, context_id)
+    context_id = uuid.uuid4().hex
+    await asyncio.gather(
+        asyncio.to_thread(store.save_context, context_id, payload.user_id, payload.query, ranked),
+        asyncio.to_thread(store.add_search_history, payload.user_id, payload.query, categories, context_id),
+    )
 
     response = SearchResponse(
         query=payload.query,
@@ -292,14 +360,22 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             source_filter=payload.source_filter,
             source_type_filter=payload.source_type_filter,
             sort_by=payload.sort_by,
+            domain_filter=payload.domain_filter,
+            author_filter=payload.author_filter,
+            min_credibility=payload.min_credibility,
+            language_filter=payload.language_filter,
+            region_filter=payload.region_filter,
+            date_from=payload.date_from,
+            date_to=payload.date_to,
         ),
         suggested_queries=(_suggested_queries(payload) if not ranked else []),
         search_mode="semantic" if embedding_service.real_embeddings_enabled else "keyword",
+        citation_warnings=_citation_warnings(str(explanation_pack.get("explanation", ""))),
     )
 
     payload_json = response.model_dump(mode="json")
     await cache.put_query_cache(cache_key, payload_json, settings.query_cache_minutes)
-    store.put_query_cache(cache_key, payload_json)
+    await asyncio.to_thread(store.put_query_cache, cache_key, payload_json)
     metrics.inc("search.calls")
     if not ranked:
         metrics.inc("search.no_result")
@@ -316,20 +392,119 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/search", response_model=SearchResponse)
-async def search(payload: SearchRequest) -> SearchResponse:
-    return await _search_core(payload, use_cache=True)
+async def search(request: Request, payload: SearchRequest) -> SearchResponse:
+    user_id = resolve_search_user(request, payload.user_id)
+    return await _search_core(payload.model_copy(update={"user_id": user_id}), use_cache=True)
+
+
+@router.post("/search/stream")
+async def search_stream(request: Request, payload: SearchRequest) -> StreamingResponse:
+    user_id = resolve_search_user(request, payload.user_id)
+
+    async def events():
+        yield 'event: status\ndata: {"stage":"retrieving"}\n\n'
+        result = await _search_core(payload.model_copy(update={"user_id": user_id}), use_cache=True)
+        metadata = result.model_dump(mode="json")
+        explanation = metadata.pop("explanation", "")
+        yield f"event: result\ndata: {json.dumps(metadata)}\n\n"
+        for chunk in re.findall(r".{1,80}(?:\s+|$)", explanation):
+            yield f"event: explanation\ndata: {json.dumps({'text': chunk})}\n\n"
+        yield 'event: done\ndata: {"ok":true}\n\n'
+
+    return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@router.post("/search/feedback")
+async def search_feedback(request: Request, payload: SearchFeedbackRequest) -> dict:
+    user_id = resolve_search_user(request, "default")
+    if not await asyncio.to_thread(store.get_context, payload.context_id, user_id):
+        raise HTTPException(status_code=404, detail="Context not found")
+    await asyncio.to_thread(
+        store.add_search_feedback, user_id, payload.context_id, payload.helpful, payload.comment
+    )
+    return {"ok": True}
+
+
+@router.post("/conversations")
+async def create_conversation(request: Request, payload: ConversationCreateRequest) -> dict:
+    user = current_user(request)
+    conversation = await asyncio.to_thread(
+        store.create_conversation, user.user_id, payload.context_id, payload.title
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Context not found")
+    return conversation
+
+
+@router.get("/conversations")
+async def list_conversations(request: Request, limit: int = 50, offset: int = 0) -> list[dict]:
+    user = current_user(request)
+    return await asyncio.to_thread(
+        store.list_conversations, user.user_id, max(1, min(limit, 100)), max(0, offset)
+    )
+
+
+@router.get("/conversations/{conversation_id}")
+async def get_conversation(request: Request, conversation_id: str) -> dict:
+    user = current_user(request)
+    conversation = await asyncio.to_thread(store.get_conversation, conversation_id, user.user_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation
+
+
+@router.post("/conversations/{conversation_id}/messages")
+async def add_conversation_message(
+    request: Request, conversation_id: str, payload: ConversationMessageRequest
+) -> dict:
+    user = current_user(request)
+    context = await asyncio.to_thread(store.conversation_context, conversation_id, user.user_id)
+    if not context:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    original_query, docs = context
+    await asyncio.to_thread(
+        store.add_conversation_message, conversation_id, user.user_id, "user", payload.question, []
+    )
+    answer, key_points = await explainer.followup(
+        original_query, docs, payload.question, payload.explanation_mode
+    )
+    message = await asyncio.to_thread(
+        store.add_conversation_message,
+        conversation_id, user.user_id, "assistant", answer, key_points,
+    )
+    return message or {}
+
+
+@router.post("/contexts/{context_id}/share")
+async def share_context(request: Request, context_id: str, ttl_days: int = 7) -> dict:
+    user = current_user(request)
+    token = await asyncio.to_thread(
+        store.share_context, context_id, user.user_id, max(1, min(ttl_days, 30))
+    )
+    if not token:
+        raise HTTPException(status_code=404, detail="Context not found")
+    return {"share_token": token, "expires_in_days": max(1, min(ttl_days, 30))}
+
+
+@router.get("/shared/{share_token}")
+async def shared_context(share_token: str) -> dict:
+    result = await asyncio.to_thread(store.get_shared_context, share_token)
+    if not result:
+        raise HTTPException(status_code=404, detail="Shared context not found or expired")
+    return result
 
 
 @router.post("/compare")
-async def compare(payload: CompareRequest) -> dict:
+async def compare(request: Request, payload: CompareRequest) -> dict:
+    user_id = resolve_search_user(request, payload.user_id)
     request_a = SearchRequest(
-        query=payload.query_a, user_id=payload.user_id, categories=payload.categories,
+        query=payload.query_a, user_id=user_id, categories=payload.categories,
         top_k=8, timeline=False, recency_days=payload.recency_days,
         source_filter=payload.source_filter, source_type_filter=payload.source_type_filter,
         sort_by=payload.sort_by,
     )
     request_b = SearchRequest(
-        query=payload.query_b, user_id=payload.user_id, categories=payload.categories,
+        query=payload.query_b, user_id=user_id, categories=payload.categories,
         top_k=8, timeline=False, recency_days=payload.recency_days,
         source_filter=payload.source_filter, source_type_filter=payload.source_type_filter,
         sort_by=payload.sort_by,
@@ -345,8 +520,9 @@ async def compare(payload: CompareRequest) -> dict:
 
 
 @router.post("/followup", response_model=FollowUpResponse)
-async def followup(payload: FollowUpRequest) -> FollowUpResponse:
-    context = store.get_context(payload.context_id, payload.user_id)
+async def followup(request: Request, payload: FollowUpRequest) -> FollowUpResponse:
+    user_id = resolve_search_user(request, payload.user_id)
+    context = await asyncio.to_thread(store.get_context, payload.context_id, user_id)
     if not context:
         raise HTTPException(status_code=404, detail="Context not found for this user")
     query, docs = context

@@ -48,6 +48,8 @@ export interface SourceDoc {
   personalization_score: number;
   total_score: number;
   entity_tags: string[];
+  language?: string;
+  region?: string;
   research_metadata?: ResearchMetadata;
   sports_metadata?: SportsMetadata;
 }
@@ -73,6 +75,13 @@ export interface AppliedFilters {
   source_filter: string[];
   source_type_filter: SourceType[];
   sort_by: SortBy;
+  domain_filter?: string[];
+  author_filter?: string[];
+  min_credibility?: number;
+  language_filter?: string[];
+  region_filter?: string[];
+  date_from?: string;
+  date_to?: string;
 }
 
 export interface SearchResponse {
@@ -91,6 +100,24 @@ export interface SearchResponse {
   applied_filters: AppliedFilters;
   suggested_queries: string[];
   search_mode: "semantic" | "keyword";
+  citation_warnings?: string[];
+}
+
+export interface Conversation {
+  conversation_id: string;
+  context_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages?: ConversationMessage[];
+}
+
+export interface ConversationMessage {
+  id?: number;
+  role: "user" | "assistant";
+  content: string;
+  key_points: string[];
+  created_at: string;
 }
 
 export interface FollowUpResponse {
@@ -106,6 +133,7 @@ export interface AuthUser {
   created_at: string;
   is_admin: boolean;
   email_verified: boolean;
+  mfa_enabled?: boolean;
 }
 
 export interface AuthSession {
@@ -117,6 +145,7 @@ export interface AuthFormState {
   email: string;
   password: string;
   display_name: string;
+  otp_code?: string;
 }
 
 export interface TokenPreviewResponse {
@@ -142,6 +171,9 @@ export interface AlertDeliverySettings {
   webhook_url: string;
   digest_mode: DigestMode;
   enabled: boolean;
+  email_enabled?: boolean;
+  timezone?: string;
+  delivery_hour?: number;
 }
 
 export interface BookmarkItem {
@@ -149,6 +181,9 @@ export interface BookmarkItem {
   user_id: string;
   source: SourceDoc;
   saved_at?: string;
+  folder?: string;
+  tags?: string[];
+  notes?: string;
 }
 
 export interface FollowResponse {

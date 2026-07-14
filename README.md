@@ -1,5 +1,7 @@
 # SignalScope AI
 
+The full code review, implemented gap analysis, and deployment-only requirements are tracked in [docs/IMPLEMENTATION_REVIEW.md](docs/IMPLEMENTATION_REVIEW.md).
+
 SignalScope AI is a full-stack AI search and retrieval platform for:
 - tech news
 - research papers
@@ -343,6 +345,9 @@ AI providers:
 
 Auth / email:
 - `EMAIL_PREVIEW_TOKENS=false`
+- `BOOTSTRAP_ADMIN_EMAIL` explicitly selects the only account automatically granted initial admin access.
+- `WEBHOOK_ALLOWED_HOSTS` optionally restricts alert webhooks to a comma-separated host allowlist.
+- `WEBHOOK_REQUIRE_HTTPS=true` rejects insecure webhook destinations.
 - SMTP variables if you want real verification and password reset emails
 
 Optional retrieval infra:

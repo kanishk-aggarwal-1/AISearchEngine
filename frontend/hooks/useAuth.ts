@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFetch } from "../lib/api";
+import { credentialJSON, requestOptions } from "../lib/passkeys";
 import type {
   AuthFormState,
   AuthSession,
@@ -29,7 +30,7 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
 export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [authForm, setAuthForm] = useState<AuthFormState>({ email: "", password: "", display_name: "" });
+  const [authForm, setAuthForm] = useState<AuthFormState>({ email: "", password: "", display_name: "", otp_code: "" });
   const [resetEmail, setResetEmail] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [resetPassword, setResetPassword] = useState("");
@@ -95,7 +96,7 @@ export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
       const r = await fetch(`${apiUrl}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: authForm.email, password: authForm.password }),
+        body: JSON.stringify({ email: authForm.email, password: authForm.password, otp_code: authForm.otp_code || "" }),
       });
       if (!r.ok) {
         const p = await r.json().catch(() => ({}));
@@ -120,6 +121,38 @@ export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
       onInfo?.("Signed out.");
     }
   }, [apiFetch, token, onInfo]);
+
+  const loginWithPasskey = useCallback(async () => {
+    if (!authForm.email || !window.PublicKeyCredential) {
+      onError?.("Enter your email and use a browser that supports passkeys.");
+      return;
+    }
+    try {
+      const begin = await fetch(`${apiUrl}/auth/passkeys/authentication/options`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: authForm.email }),
+      });
+      if (!begin.ok) throw new Error("No passkey is available for this account.");
+      const options = await begin.json() as { challenge_id: string; publicKey: Record<string, any> };
+      const credential = await navigator.credentials.get({ publicKey: requestOptions(options.publicKey) });
+      if (!credential) throw new Error("Passkey request was cancelled.");
+      const response = await fetch(`${apiUrl}/auth/passkeys/authentication/verify`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challenge_id: options.challenge_id, credential: credentialJSON(credential) }),
+      });
+      if (!response.ok) throw new Error("Passkey authentication failed.");
+      persistSession(await response.json() as AuthSession);
+      onInfo?.("Signed in with your passkey.");
+    } catch (err) { onError?.((err as Error).message); }
+  }, [apiUrl, authForm.email, onError, onInfo, persistSession]);
+
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const response = await fetch(`${apiUrl}/auth/oauth/google`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id_token: idToken }),
+    });
+    if (!response.ok) { onError?.("Google sign-in failed."); return; }
+    persistSession(await response.json() as AuthSession);
+    onInfo?.("Signed in with Google.");
+  }, [apiUrl, onError, onInfo, persistSession]);
 
   const requestVerification = useCallback(async () => {
     try {
@@ -206,6 +239,8 @@ export function useAuth(apiUrl: string, { onError, onInfo }: Callbacks = {}) {
     verificationPreview,
     resetPreview,
     submitAuth,
+    loginWithPasskey,
+    loginWithGoogle,
     logout,
     requestVerification,
     verifyEmailFromPreview,

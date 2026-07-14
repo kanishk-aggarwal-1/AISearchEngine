@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 from logging.config import fileConfig
 from pathlib import Path
 
@@ -27,6 +26,9 @@ def _alembic_database_url() -> str:
                     'unable to open database file'.
     """
     if settings.using_postgres:
+        return settings.database_url
+
+    if settings.database_url.strip().lower().startswith("sqlite:"):
         return settings.database_url
 
     db_path = settings.sqlite_database_path

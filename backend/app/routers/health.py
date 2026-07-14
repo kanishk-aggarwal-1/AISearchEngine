@@ -26,9 +26,7 @@ async def health() -> dict:
         "real_embeddings_enabled": embedding_service.real_embeddings_enabled,
         "strict_real_embeddings": settings.strict_real_embeddings,
         "newsapi_enabled": bool(settings.newsapi_key),
-        "db_path": settings.db_path,
         "scheduler_interval_minutes": settings.scheduler_interval_minutes,
-        "embedding_model": settings.embedding_model,
         "vector_backend": settings.vector_backend,
         "vector_enabled": vector_index.enabled,
         "metrics_enabled": settings.enable_metrics,
@@ -63,7 +61,6 @@ async def deep_health() -> dict:
             "status": "ok" if db_ok else "degraded",
             "backend": "postgres" if settings.using_postgres else "sqlite",
             "database_url_configured": bool(settings.database_url.strip()),
-            "sqlite_path": settings.sqlite_database_path,
         },
         "cache": {
             "status": "ok" if redis_ok else ("disabled" if not cache.using_redis else "degraded"),
