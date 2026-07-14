@@ -6,7 +6,9 @@ from backend.app.models import Category, SourceDoc
 from backend.app.services.document_store import DocumentStore
 from backend.app.sources.arxiv import ArxivSourceProvider
 from backend.app.sources.base import SourceProvider
+from backend.app.sources.crossref import CrossrefSourceProvider
 from backend.app.sources.newsapi import NewsApiSourceProvider
+from backend.app.sources.openalex import OpenAlexSourceProvider
 from backend.app.sources.rss import RssSourceProvider
 from backend.app.sources.sports import SportsDbSourceProvider
 
@@ -25,6 +27,8 @@ class SourceRegistry:
             ],
             "research": [
                 ArxivSourceProvider(),
+                OpenAlexSourceProvider(),
+                CrossrefSourceProvider(),
                 RssSourceProvider("https://news.mit.edu/rss/research", "MIT Research", "research"),
             ],
             "sports": [

@@ -20,7 +20,14 @@ class CacheService:
 
         if self.backend == "redis" and redis and settings.redis_url:
             try:
-                self.client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+                self.client = redis.from_url(
+                    settings.redis_url,
+                    encoding="utf-8",
+                    decode_responses=True,
+                    socket_connect_timeout=1,
+                    socket_timeout=1,
+                    retry_on_timeout=False,
+                )
                 self.enabled = True
             except Exception as exc:
                 self.logger.warning("redis_cache_init_failed error=%s", exc)
@@ -57,11 +64,11 @@ class CacheService:
     async def put_query_cache(self, query_key: str, payload: dict[str, Any], ttl_minutes: int) -> None:
         await self.set_json("query_cache", query_key, payload, ttl_minutes)
 
-    async def incr(self, key: str, ttl_seconds: int = 60) -> int:
+    async def incr(self, key: str, ttl_seconds: int = 60) -> int | None:
         """Atomically increment a counter and set TTL on first write. Returns new count.
-        Returns 0 when Redis is unavailable so callers fall back to in-process limiting."""
+        Returns None when Redis is unavailable so callers can use a fallback."""
         if not self.using_redis:
-            return 0
+            return None
         full_key = f"{self.prefix}:{key}"
         try:
             count = await self.client.incr(full_key)
@@ -70,12 +77,13 @@ class CacheService:
             return count
         except Exception as exc:
             self.logger.warning("redis_incr_failed key=%s error=%s — falling back to in-process", key, exc)
-            return 0  # fall back to in-process rate limiting in main.py
+            self.enabled = False
+            return None
 
-    async def get_int(self, key: str) -> int:
-        """Read an integer counter. Returns 0 when missing or Redis is unavailable."""
+    async def get_int(self, key: str) -> int | None:
+        """Read a counter, returning None when Redis is unavailable."""
         if not self.using_redis:
-            return 0
+            return None
         try:
             raw = await self.client.get(f"{self.prefix}:{key}")
             return int(raw) if raw is not None else 0
@@ -83,7 +91,7 @@ class CacheService:
             return 0
         except Exception as exc:
             self.logger.warning("redis_get_int_failed key=%s error=%s", key, exc)
-            return 0
+            return None
 
     async def delete(self, key: str) -> None:
         """Delete a prefixed key. No-op when Redis is unavailable."""
@@ -101,6 +109,7 @@ class CacheService:
             return bool(await self.client.ping())
         except Exception as exc:
             self.logger.warning("redis_cache_ping_failed error=%s", exc)
+            self.enabled = False
             return False
 
     async def close(self) -> None:
@@ -110,3 +119,25 @@ class CacheService:
             await self.client.aclose()
         except Exception as exc:
             self.logger.warning("redis_cache_close_failed error=%s", exc)
+
+    async def acquire_lock(self, name: str, owner: str, ttl_seconds: int) -> bool:
+        if not self.using_redis:
+            return True
+        try:
+            return bool(await self.client.set(
+                self._key("locks", name), owner, ex=max(5, ttl_seconds), nx=True
+            ))
+        except Exception as exc:
+            self.logger.warning("redis_lock_acquire_failed name=%s error=%s", name, exc)
+            self.enabled = False
+            return False
+
+    async def release_lock(self, name: str, owner: str) -> None:
+        if not self.using_redis:
+            return
+        key = self._key("locks", name)
+        script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
+        try:
+            await self.client.eval(script, 1, key, owner)
+        except Exception as exc:
+            self.logger.warning("redis_lock_release_failed name=%s error=%s", name, exc)

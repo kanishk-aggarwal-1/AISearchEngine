@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { AuthFormState, AuthSession, TokenPreviewResponse } from "../types/api";
 
 interface Props {
@@ -22,6 +23,8 @@ interface Props {
   verifyEmailFromPreview: () => void;
   requestPasswordReset: () => void;
   confirmPasswordReset: () => void;
+  loginWithPasskey?: () => void;
+  loginWithGoogle?: (credential: string) => void;
 }
 
 export default function AuthPanel({
@@ -30,7 +33,27 @@ export default function AuthPanel({
   resetPassword, setResetPassword, verificationPreview, resetPreview,
   submitAuth, logout, requestVerification, verifyEmailFromPreview,
   requestPasswordReset, confirmPasswordReset,
+  loginWithPasskey = () => undefined, loginWithGoogle = () => undefined,
 }: Props) {
+  const googleButton = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId || session) return;
+    const render = () => {
+      const google = (window as any).google;
+      if (!google || !googleButton.current) return;
+      google.accounts.id.initialize({ client_id: clientId, callback: (data: { credential: string }) => loginWithGoogle(data.credential) });
+      google.accounts.id.renderButton(googleButton.current, { theme: "outline", size: "large" });
+    };
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://accounts.google.com/gsi/client"]');
+    if (existing) { existing.addEventListener("load", render); render(); return () => existing.removeEventListener("load", render); }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.addEventListener("load", render);
+    document.head.appendChild(script);
+    return () => script.removeEventListener("load", render);
+  }, [loginWithGoogle, session]);
   return (
     <div className="auth-shell">
       {session ? (
@@ -63,6 +86,7 @@ export default function AuthPanel({
           </div>
           <input value={authForm.email} onChange={(e) => setAuthForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" />
           <input type="password" value={authForm.password} onChange={(e) => setAuthForm((p) => ({ ...p, password: e.target.value }))} placeholder="Password" />
+          {authMode === "login" && <input inputMode="numeric" value={authForm.otp_code || ""} onChange={(e) => setAuthForm((p) => ({ ...p, otp_code: e.target.value }))} placeholder="Authenticator code (if enabled)" aria-label="Authenticator code" />}
           {authMode === "register" && (
             <>
               <input value={authForm.display_name} onChange={(e) => setAuthForm((p) => ({ ...p, display_name: e.target.value }))} placeholder="Display name" />
@@ -70,6 +94,8 @@ export default function AuthPanel({
             </>
           )}
           <button type="button" onClick={submitAuth}>{authMode === "register" ? "Create account" : "Sign in"}</button>
+          {authMode === "login" && <button type="button" onClick={loginWithPasskey}>Use passkey</button>}
+          <div ref={googleButton} aria-label="Google sign-in" />
         </>
       )}
       <div className="auth-helper">

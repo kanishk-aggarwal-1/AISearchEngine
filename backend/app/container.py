@@ -15,6 +15,7 @@ from backend.app.services.metrics_store import MetricsStore
 from backend.app.services.observability_service import MetricsService
 from backend.app.services.retriever import RetrieverService
 from backend.app.services.scheduler import SchedulerService
+from backend.app.services.passkey_service import PasskeyService
 from backend.app.services.source_registry import SourceRegistry
 from backend.app.services.store_factory import create_store
 from backend.app.services.vector_index_service import VectorIndexService
@@ -35,6 +36,7 @@ retriever = RetrieverService(embedding_service)
 explainer = ExplainerService()
 vector_index = VectorIndexService()
 ingestion = IngestionService(registry, store, enricher, settings.max_fetch_per_source)
-alerts = AlertService(store, metrics=metrics)
-scheduler = SchedulerService(ingestion, settings.scheduler_interval_minutes, alerts=alerts)
 email_service = EmailService()
+alerts = AlertService(store, metrics=metrics, email_service=email_service)
+scheduler = SchedulerService(ingestion, settings.scheduler_interval_minutes, alerts=alerts, cache=cache)
+passkeys = PasskeyService(store)

@@ -78,8 +78,9 @@ class PostgresDocumentStore(DocumentStore):
             existing = conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
             if existing:
                 raise ValueError("An account with this email already exists")
-            existing_count = conn.execute("SELECT COUNT(*) AS count FROM auth_users").fetchone()["count"]
-            is_admin = 1 if existing_count == 0 else 0
+            from backend.app.config import settings
+            bootstrap_email = settings.bootstrap_admin_email.strip().lower()
+            is_admin = 1 if bootstrap_email and normalized_email == bootstrap_email else 0
             conn.execute(
                 """
                 INSERT INTO auth_users (user_id, email, password_hash, display_name, created_at, is_admin, email_verified)
@@ -180,26 +181,28 @@ class PostgresDocumentStore(DocumentStore):
             "source_freshness": self.source_freshness_summary(),
         }
 
-    def add_bookmark(self, user_id: str, source: SourceDoc) -> BookmarkItem:
+    def add_bookmark(self, user_id: str, source: SourceDoc, folder: str = "", tags: List[str] | None = None, notes: str = "") -> BookmarkItem:
         canonical_url = self.canonicalize_url(source.url, source.source, source.title)
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             row = conn.execute(
                 """
-                INSERT INTO user_bookmarks (user_id, canonical_url, source_json, created_at)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_bookmarks (user_id, canonical_url, source_json, created_at, folder, tags_json, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id, canonical_url) DO UPDATE SET
                     source_json = EXCLUDED.source_json,
                     created_at = EXCLUDED.created_at
-                RETURNING id, user_id, source_json, created_at
+                    , folder = EXCLUDED.folder, tags_json = EXCLUDED.tags_json, notes = EXCLUDED.notes
+                RETURNING id, user_id, source_json, created_at, folder, tags_json, notes
                 """,
-                (user_id, canonical_url, json.dumps(source.model_dump(mode="json")), now_iso),
+                (user_id, canonical_url, json.dumps(source.model_dump(mode="json")), now_iso, folder.strip(), json.dumps(tags or []), notes.strip()),
             ).fetchone()
         return BookmarkItem(
             id=row["id"],
             user_id=row["user_id"],
             source=SourceDoc.model_validate(json.loads(row["source_json"])),
             saved_at=row["created_at"],
+            folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
         )
 
     def create_ingestion_run(self, trigger_type: str, query: str = "", categories: List[Category] | None = None) -> int:

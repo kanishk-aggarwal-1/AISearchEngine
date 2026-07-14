@@ -12,6 +12,7 @@ import SearchForm from "../components/SearchForm";
 import SearchResults from "../components/SearchResults";
 import SportsWorkspace from "../components/SportsWorkspace";
 import UserDashboard from "../components/UserDashboard";
+import AccountSettings from "../components/AccountSettings";
 
 import { useAdmin } from "../hooks/useAdmin";
 import { useAuth } from "../hooks/useAuth";
@@ -68,6 +69,7 @@ export default function HomePage() {
           resetPassword={auth.resetPassword} setResetPassword={auth.setResetPassword}
           verificationPreview={auth.verificationPreview} resetPreview={auth.resetPreview}
           submitAuth={auth.submitAuth} logout={auth.logout}
+          loginWithPasskey={auth.loginWithPasskey} loginWithGoogle={auth.loginWithGoogle}
           requestVerification={auth.requestVerification} verifyEmailFromPreview={auth.verifyEmailFromPreview}
           requestPasswordReset={auth.requestPasswordReset} confirmPasswordReset={auth.confirmPasswordReset}
         />
@@ -94,8 +96,14 @@ export default function HomePage() {
         sortBy={search.sortBy} setSortBy={search.setSortBy}
         sourceFilterText={search.sourceFilterText} setSourceFilterText={search.setSourceFilterText}
         sourceTypesSelected={search.sourceTypesSelected} toggleSourceType={search.toggleSourceType}
+        domainFilterText={search.domainFilterText} setDomainFilterText={search.setDomainFilterText}
+        authorFilterText={search.authorFilterText} setAuthorFilterText={search.setAuthorFilterText}
+        languageFilterText={search.languageFilterText} setLanguageFilterText={search.setLanguageFilterText}
+        regionFilterText={search.regionFilterText} setRegionFilterText={search.setRegionFilterText}
+        dateFrom={search.dateFrom} setDateFrom={search.setDateFrom} dateTo={search.dateTo} setDateTo={search.setDateTo}
+        minCredibility={search.minCredibility} setMinCredibility={search.setMinCredibility}
         activeUserId={activeUserId} setUserId={setUserId} session={auth.session}
-        loading={search.loading} onSubmit={search.runSearch}
+        loading={search.loading} onSubmit={search.runSearch} onCancel={search.cancelSearch}
         onRefreshFollows={personalization.refreshFollows} onRefreshAlerts={personalization.refreshAlerts}
         onFetchSportsInsights={() => sports.fetchSportsInsights(search.query)}
         onFetchSportsDashboard={() => sports.fetchSportsDashboard(search.recencyDays)}
@@ -105,14 +113,19 @@ export default function HomePage() {
 
       <PersonalizationPanel
         followEntity={personalization.followEntity} setFollowEntity={personalization.setFollowEntity}
-        followed={personalization.followed} onAddFollow={personalization.addFollow}
+        followed={personalization.followed} onAddFollow={personalization.addFollow} onRemoveFollow={personalization.removeFollow}
         alertQuery={personalization.alertQuery} setAlertQuery={personalization.setAlertQuery}
-        alerts={personalization.alerts}
+        alerts={personalization.alerts} onDeleteAlert={personalization.deleteAlert} onToggleAlert={personalization.toggleAlert}
         onCreateAlert={() => personalization.createAlert(personalization.alertQuery, search.selected)}
         delivery={personalization.delivery} setDelivery={personalization.setDelivery}
         deliveryTest={personalization.deliveryTest}
         onSaveDelivery={personalization.saveDelivery} onTestDelivery={personalization.testDelivery}
         bookmarks={personalization.bookmarks} onRemoveBookmark={personalization.removeBookmark}
+        bookmarkFolder={personalization.bookmarkFolder} setBookmarkFolder={personalization.setBookmarkFolder}
+        bookmarkTags={personalization.bookmarkTags} setBookmarkTags={personalization.setBookmarkTags}
+        bookmarkNotes={personalization.bookmarkNotes} setBookmarkNotes={personalization.setBookmarkNotes}
+        onUpdateBookmark={personalization.updateBookmark}
+        onLoadMoreBookmarks={personalization.loadMoreBookmarks}
         activeUserId={activeUserId}
       />
 
@@ -122,8 +135,12 @@ export default function HomePage() {
         savedSessions={search.savedSessions}
         sessionLabel={search.sessionLabel} setSessionLabel={search.setSessionLabel}
         onSaveSession={search.saveCurrentSession} result={search.result}
+        onOpenSession={search.openSavedSession} onDeleteSession={search.deleteSavedSession}
+        onLoadMoreHistory={search.loadMoreHistory} onLoadMoreSessions={search.loadMoreSavedSessions}
         followed={personalization.followed} alerts={personalization.alerts} bookmarks={personalization.bookmarks}
       />
+
+      <AccountSettings session={auth.session} apiFetch={auth.apiFetch} onInfo={setInfo} onError={setError} onDeleted={auth.logout} />
 
       <SearchResults
         result={search.result} loading={search.loading} appliedFiltersText={search.appliedFiltersText} session={auth.session}
@@ -139,6 +156,10 @@ export default function HomePage() {
         onExpandRecency={() => search.setRecencyDays(30)}
         onSuggestedQuery={search.useSuggestedQuery}
         onRunFollowUp={search.runFollowUp}
+        onFeedback={search.submitFeedback}
+        onCreateConversation={search.createConversation}
+        onShare={search.shareCurrentContext}
+        shareUrl={search.shareUrl}
       />
 
       <section className="two-grid">

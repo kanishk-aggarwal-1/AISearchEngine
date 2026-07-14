@@ -23,7 +23,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Lint (ruff)
-        run: python -m ruff check backend/ tests/ scripts/
+        run: python -m ruff check backend/ tests/ scripts/ alembic/
 
       - name: Validate database migrations
         env:
@@ -55,6 +55,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +80,12 @@ jobs:
 
       - name: Run Postgres store contract tests
         run: python -m pytest tests/test_postgres_store.py -v --tb=short
+
+      - name: Verify Redis integration
+        env:
+          CACHE_BACKEND: redis
+          REDIS_URL: redis://localhost:6379/0
+        run: python -c "import asyncio; from backend.app.services.cache_service import CacheService; c=CacheService(); assert asyncio.run(c.ping())"
 
   frontend:
     runs-on: ubuntu-latest

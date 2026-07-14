@@ -8,11 +8,14 @@ interface Props {
   savedSessions: SavedSessionItem[];
   sessionLabel: string; setSessionLabel: (v: string) => void;
   onSaveSession: (contextId: string | undefined, token: string | null) => void;
+  onOpenSession: (contextId: string) => void;
+  onDeleteSession: (sessionId: number) => void;
   result: SearchResponse | null;
+  onLoadMoreHistory: () => void; onLoadMoreSessions: () => void;
   followed: string[]; alerts: AlertRule[]; bookmarks: BookmarkItem[];
 }
 
-export default function UserDashboard({ session, history, onHistorySelect, savedSessions, sessionLabel, setSessionLabel, onSaveSession, result, followed, alerts, bookmarks }: Props) {
+export default function UserDashboard({ session, history, onHistorySelect, savedSessions, sessionLabel, setSessionLabel, onSaveSession, onOpenSession, onDeleteSession, result, onLoadMoreHistory, onLoadMoreSessions, followed, alerts, bookmarks }: Props) {
   if (!session) return null;
   return (
     <section className="three-grid">
@@ -26,6 +29,7 @@ export default function UserDashboard({ session, history, onHistorySelect, saved
             </button>
           )) : <p className="muted">No saved history yet.</p>}
         </div>
+        {history.length >= 12 && <button type="button" className="mini-button" onClick={onLoadMoreHistory}>Load more history</button>}
       </article>
       <article className="query-card">
         <h2>Saved Sessions</h2>
@@ -33,12 +37,17 @@ export default function UserDashboard({ session, history, onHistorySelect, saved
           <input value={sessionLabel} onChange={(e) => setSessionLabel(e.target.value)} placeholder="Label current search session" />
           <button type="button" onClick={() => onSaveSession(result?.context_id, session?.token ?? null)} disabled={!result?.context_id}>Save current</button>
         </div>
+        {savedSessions.length >= 12 && <button type="button" className="mini-button" onClick={onLoadMoreSessions}>Load more sessions</button>}
         <div className="panel-list compact-list">
           {savedSessions.length ? savedSessions.map((item) => (
             <div key={item.id} className="bookmark-item">
               <div>
                 <p className="bookmark-title">{item.label || item.context_id}</p>
                 <p className="muted">{item.context_id} | {new Date(item.created_at).toLocaleString()}</p>
+              </div>
+              <div className="quick-actions">
+                <button type="button" className="mini-button" onClick={() => onOpenSession(item.context_id)}>Open</button>
+                {item.id != null && <button type="button" className="mini-button" onClick={() => onDeleteSession(item.id!)}>Delete</button>}
               </div>
             </div>
           )) : <p className="muted">No saved sessions yet.</p>}

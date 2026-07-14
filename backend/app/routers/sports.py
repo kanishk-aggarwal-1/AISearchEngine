@@ -1,12 +1,101 @@
 from collections import Counter
 
 from fastapi import APIRouter
+import httpx
 
+from backend.app.config import settings
 from backend.app.container import enricher, store
 from backend.app.models import SourceDoc
 from backend.app.routers.browse import filter_recent_docs, latest_headlines_for_category
 
 router = APIRouter(prefix="/sports")
+
+
+async def _sportsdb(path: str, **params: object) -> dict:
+    url = f"https://www.thesportsdb.com/api/v1/json/3/{path}"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds)) as client:
+        response = await client.get(url, params=params)
+        response.raise_for_status()
+    return response.json()
+
+
+@router.get("/teams/search")
+async def sports_team_search(name: str) -> dict:
+    teams = (await _sportsdb("searchteams.php", t=name)).get("teams") or []
+    return {"teams": [{
+        "team_id": team.get("idTeam"), "name": team.get("strTeam"),
+        "league": team.get("strLeague"), "sport": team.get("strSport"),
+        "country": team.get("strCountry"), "stadium": team.get("strStadium"),
+        "badge": team.get("strBadge"),
+    } for team in teams]}
+
+
+@router.get("/team/{team_id}/roster")
+async def sports_team_roster(team_id: int) -> dict:
+    players = (await _sportsdb("lookup_all_players.php", id=team_id)).get("player") or []
+    return {"team_id": team_id, "players": [{
+        "player_id": player.get("idPlayer"), "name": player.get("strPlayer"),
+        "position": player.get("strPosition"), "nationality": player.get("strNationality"),
+        "number": player.get("strNumber"), "status": player.get("strStatus"),
+        "signed": player.get("dateSigned"), "thumbnail": player.get("strThumb"),
+    } for player in players]}
+
+
+@router.get("/players/search")
+async def sports_player_search(name: str) -> dict:
+    players = (await _sportsdb("searchplayers.php", p=name)).get("player") or []
+    return {"players": [{
+        "player_id": player.get("idPlayer"), "name": player.get("strPlayer"),
+        "team": player.get("strTeam"), "sport": player.get("strSport"),
+        "position": player.get("strPosition"), "nationality": player.get("strNationality"),
+    } for player in players]}
+
+
+@router.get("/updates/{update_type}")
+async def sports_updates(update_type: str, team: str = "", limit: int = 20) -> dict:
+    if update_type not in {"injuries", "transactions"}:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="update_type must be injuries or transactions")
+    terms = "injury injured questionable out" if update_type == "injuries" else "trade transfer signed waived transaction"
+    query = " ".join(filter(None, [team, terms]))
+    docs = store.search_documents(query, ["sports"], limit=max(1, min(limit, 50)))
+    return {"type": update_type, "team": team, "updates": [doc.model_dump(mode="json") for doc in docs]}
+
+
+@router.get("/schedule")
+async def sports_schedule(league_id: int) -> dict:
+    url = "https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds)) as client:
+        response = await client.get(url, params={"id": league_id})
+        response.raise_for_status()
+    events = response.json().get("events") or []
+    return {
+        "league_id": league_id,
+        "events": [{
+            "event_id": item.get("idEvent"), "name": item.get("strEvent"),
+            "league": item.get("strLeague"), "date": item.get("dateEvent"),
+            "time": item.get("strTime"), "home": item.get("strHomeTeam"),
+            "away": item.get("strAwayTeam"), "venue": item.get("strVenue"),
+        } for item in events],
+    }
+
+
+@router.get("/standings")
+async def sports_standings(league_id: int, season: str) -> dict:
+    url = "https://www.thesportsdb.com/api/v1/json/3/lookuptable.php"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds)) as client:
+        response = await client.get(url, params={"l": league_id, "s": season})
+        response.raise_for_status()
+    rows = response.json().get("table") or []
+    return {
+        "league_id": league_id, "season": season,
+        "standings": [{
+            "rank": item.get("intRank"), "team": item.get("strTeam"),
+            "played": item.get("intPlayed"), "wins": item.get("intWin"),
+            "draws": item.get("intDraw"), "losses": item.get("intLoss"),
+            "points": item.get("intPoints"),
+        } for item in rows],
+    }
 
 
 @router.get("/insights")

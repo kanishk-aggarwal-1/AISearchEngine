@@ -2,9 +2,12 @@ from collections import Counter
 from typing import List
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
+import httpx
 from pydantic import BaseModel
 
-from backend.app.container import explainer, store
+from backend.app.config import settings
+from backend.app.container import explainer, registry, store
 from backend.app.models import SearchRequest, SourceDoc
 from backend.app.routers.search import _search_core
 
@@ -19,6 +22,52 @@ class ResearchExplainRequest(BaseModel):
 class ResearchCompareRequest(BaseModel):
     left: SourceDoc
     right: SourceDoc
+
+
+@router.get("/external-papers")
+async def external_research_papers(query: str = "AI", limit: int = 20) -> dict:
+    docs = await registry.gather(query, ["research"], max(1, min(limit, 25)))
+    papers = sorted(
+        docs,
+        key=lambda item: item.research_metadata.citations
+        if item.research_metadata and item.research_metadata.citations is not None else -1,
+        reverse=True,
+    )
+    return {
+        "query": query,
+        "providers": sorted({paper.source for paper in papers}),
+        "papers": [paper.model_dump(mode="json") for paper in papers[:limit]],
+    }
+
+
+@router.get("/citation-graph/{paper_id}")
+async def research_citation_graph(paper_id: str) -> dict:
+    identifier = paper_id if paper_id.startswith(("W", "https://")) else f"https://doi.org/{paper_id}"
+    base = "https://api.openalex.org/works"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds)) as client:
+        response = await client.get(f"{base}/{identifier}")
+        if response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Paper not found in OpenAlex")
+        response.raise_for_status()
+        work = response.json()
+        openalex_id = (work.get("id") or "").rsplit("/", 1)[-1]
+        citing_response = await client.get(base, params={"filter": f"cites:{openalex_id}", "per-page": 20})
+        citing = citing_response.json().get("results", []) if citing_response.status_code < 400 else []
+    return {
+        "paper": {"id": openalex_id, "title": work.get("display_name"), "doi": work.get("doi")},
+        "cited_by_count": work.get("cited_by_count", 0),
+        "references": work.get("referenced_works", [])[:50],
+        "citing_works": [{
+            "id": item.get("id"), "title": item.get("display_name"),
+            "year": item.get("publication_year"), "doi": item.get("doi"),
+        } for item in citing],
+        "full_text": {
+            "open_access": (work.get("open_access") or {}).get("is_oa", False),
+            "url": ((work.get("best_oa_location") or {}).get("pdf_url")
+                    or (work.get("best_oa_location") or {}).get("landing_page_url")),
+            "license": (work.get("best_oa_location") or {}).get("license"),
+        },
+    }
 
 
 @router.get("/insights")
@@ -97,6 +146,20 @@ async def research_paper_page(paper_id: str) -> dict:
         "summary": explanation,
         "related_papers": [doc.model_dump(mode="json") for doc in related[:6]],
     }
+
+
+@router.get("/paper/{paper_id}/bibtex", response_class=PlainTextResponse)
+async def research_paper_bibtex(paper_id: str) -> str:
+    docs = store.all_recent_documents(["research"], limit=500)
+    match = next((doc for doc in docs if doc.research_metadata and (doc.research_metadata.paper_id or "").lower() == paper_id.lower()), None)
+    if not match:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    metadata = match.research_metadata
+    authors = " and ".join(metadata.authors) if metadata else "Unknown"
+    year = match.published_at.year if match.published_at else "n.d."
+    venue = metadata.venue if metadata and metadata.venue else ""
+    key = "".join(ch for ch in paper_id if ch.isalnum())[:32] or "signalscope"
+    return f"@article{{{key},\n  title={{{match.title}}},\n  author={{{authors}}},\n  year={{{year}}},\n  journal={{{venue}}},\n  url={{{match.url}}}\n}}"
 
 
 @router.post("/explain-paper")

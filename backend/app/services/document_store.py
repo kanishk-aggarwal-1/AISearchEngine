@@ -10,6 +10,7 @@ from typing import List
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from backend.app.config import settings
+from backend.app.services.totp_service import verify_code
 from backend.app.services.logging_service import get_logger
 from backend.app.models import (
     AlertDeliverySettings,
@@ -142,7 +143,9 @@ class DocumentStore:
                     display_name TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     is_admin INTEGER NOT NULL DEFAULT 0,
-                    email_verified INTEGER NOT NULL DEFAULT 0
+                    email_verified INTEGER NOT NULL DEFAULT 0,
+                    mfa_secret TEXT,
+                    mfa_enabled INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -173,6 +176,18 @@ class DocumentStore:
                 CREATE TABLE IF NOT EXISTS auth_password_reset_tokens (
                     token TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    used_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auth_email_change_tokens (
+                    token TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    new_email TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL,
                     used_at TEXT
@@ -250,6 +265,9 @@ class DocumentStore:
                     webhook_url TEXT NOT NULL,
                     digest_mode TEXT NOT NULL,
                     enabled INTEGER NOT NULL,
+                    email_enabled INTEGER NOT NULL DEFAULT 0,
+                    timezone TEXT NOT NULL DEFAULT 'UTC',
+                    delivery_hour INTEGER NOT NULL DEFAULT 9,
                     updated_at TEXT NOT NULL
                 )
                 """
@@ -262,7 +280,24 @@ class DocumentStore:
                     canonical_url TEXT NOT NULL,
                     source_json TEXT NOT NULL,
                     created_at TEXT NOT NULL,
+                    folder TEXT NOT NULL DEFAULT '',
+                    tags_json TEXT NOT NULL DEFAULT '[]',
+                    notes TEXT NOT NULL DEFAULT '',
                     UNIQUE(user_id, canonical_url)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS alert_delivery_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    alert_id INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    channel TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    status_code INTEGER,
+                    error TEXT NOT NULL,
+                    attempted_at TEXT NOT NULL
                 )
                 """
             )
@@ -274,6 +309,99 @@ class DocumentStore:
                     query TEXT NOT NULL,
                     sources_json TEXT NOT NULL,
                     created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS search_feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    context_id TEXT NOT NULL,
+                    helpful INTEGER NOT NULL,
+                    comment TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS conversations (
+                    conversation_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    context_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    key_points_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS shared_contexts (
+                    share_token TEXT PRIMARY KEY,
+                    context_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS scheduler_locks (
+                    lock_name TEXT PRIMARY KEY,
+                    owner TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS auth_identities (
+                    provider TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (provider, subject)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS passkey_credentials (
+                    credential_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    public_key TEXT NOT NULL,
+                    sign_count INTEGER NOT NULL,
+                    transports_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    last_used_at TEXT
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS passkey_challenges (
+                    challenge_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    challenge TEXT NOT NULL,
+                    purpose TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
                 )
                 """
             )
@@ -327,7 +455,14 @@ class DocumentStore:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_verification_user ON auth_verification_tokens (user_id, expires_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_password_reset_user ON auth_password_reset_tokens (user_id, expires_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions (expires_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_search_feedback_context ON search_feedback (context_id, created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_delivery_attempts_user ON alert_delivery_attempts (user_id, attempted_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations (user_id, updated_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation ON conversation_messages (conversation_id, created_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user ON passkey_credentials (user_id)")
             self._migrate_auth_tables_if_needed(conn)
+            self._migrate_bookmarks_if_needed(conn)
+            self._migrate_alert_delivery_if_needed(conn)
             self._migrate_source_status_table_if_needed(conn)
 
     def _migrate_auth_tables_if_needed(self, conn: sqlite3.Connection) -> None:
@@ -336,6 +471,10 @@ class DocumentStore:
             conn.execute("ALTER TABLE auth_users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
         if "email_verified" not in cols:
             conn.execute("ALTER TABLE auth_users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        if "mfa_secret" not in cols:
+            conn.execute("ALTER TABLE auth_users ADD COLUMN mfa_secret TEXT")
+        if "mfa_enabled" not in cols:
+            conn.execute("ALTER TABLE auth_users ADD COLUMN mfa_enabled INTEGER NOT NULL DEFAULT 0")
 
         session_cols = {row["name"] for row in conn.execute("PRAGMA table_info(auth_sessions)").fetchall()}
         if "expires_at" not in session_cols:
@@ -348,6 +487,24 @@ class DocumentStore:
                 WHERE expires_at = ''
                 """
             )
+
+    def _migrate_bookmarks_if_needed(self, conn: sqlite3.Connection) -> None:
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(user_bookmarks)").fetchall()}
+        if "folder" not in cols:
+            conn.execute("ALTER TABLE user_bookmarks ADD COLUMN folder TEXT NOT NULL DEFAULT ''")
+        if "tags_json" not in cols:
+            conn.execute("ALTER TABLE user_bookmarks ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'")
+        if "notes" not in cols:
+            conn.execute("ALTER TABLE user_bookmarks ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+
+    def _migrate_alert_delivery_if_needed(self, conn: sqlite3.Connection) -> None:
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(alert_delivery_settings)").fetchall()}
+        if "email_enabled" not in cols:
+            conn.execute("ALTER TABLE alert_delivery_settings ADD COLUMN email_enabled INTEGER NOT NULL DEFAULT 0")
+        if "timezone" not in cols:
+            conn.execute("ALTER TABLE alert_delivery_settings ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'")
+        if "delivery_hour" not in cols:
+            conn.execute("ALTER TABLE alert_delivery_settings ADD COLUMN delivery_hour INTEGER NOT NULL DEFAULT 9")
 
     def _migrate_source_status_table_if_needed(self, conn: sqlite3.Connection) -> None:
         cols = {row["name"] for row in conn.execute("PRAGMA table_info(source_status)").fetchall()}
@@ -653,8 +810,8 @@ class DocumentStore:
                 existing = conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
                 if existing:
                     raise ValueError("An account with this email already exists")
-                existing_count = conn.execute("SELECT COUNT(*) AS count FROM auth_users").fetchone()["count"]
-                is_admin = 1 if existing_count == 0 else 0
+                bootstrap_email = settings.bootstrap_admin_email.strip().lower()
+                is_admin = 1 if bootstrap_email and normalized_email == bootstrap_email else 0
                 conn.execute(
                     """
                     INSERT INTO auth_users (user_id, email, password_hash, display_name, created_at, is_admin, email_verified)
@@ -684,12 +841,15 @@ class DocumentStore:
             email_verified=False,
         )
 
-    def authenticate_user(self, email: str, password: str) -> AuthSessionResponse | None:
+    def authenticate_user(self, email: str, password: str, otp_code: str = "") -> AuthSessionResponse | None:
         normalized_email = email.strip().lower()
         with self._connection() as conn:
             row = conn.execute("SELECT * FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
             if not row or not self._verify_password(password, row["password_hash"]):
                 self.logger.warning("audit login_failed email=%s", normalized_email)
+                return None
+            if bool(row["mfa_enabled"]) and not verify_code(row["mfa_secret"] or "", otp_code.strip()):
+                self.logger.warning("audit login_mfa_failed user_id=%s", row["user_id"])
                 return None
             token = secrets.token_urlsafe(32)
             now = datetime.now(timezone.utc)
@@ -712,8 +872,104 @@ class DocumentStore:
                 created_at=row["created_at"],
                 is_admin=bool(row["is_admin"]),
                 email_verified=bool(row["email_verified"]),
+                mfa_enabled=bool(row["mfa_enabled"]),
             ),
         )
+
+    def issue_session(self, user_id: str) -> AuthSessionResponse | None:
+        now = datetime.now(timezone.utc)
+        with self._connection() as conn:
+            row = conn.execute("SELECT * FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
+            if not row:
+                return None
+            token = secrets.token_urlsafe(32)
+            conn.execute(
+                "INSERT INTO auth_sessions (token, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (token, user_id, now.isoformat(), now.isoformat(), (now + timedelta(days=30)).isoformat()),
+            )
+        return AuthSessionResponse(token=token, user=AuthUser(
+            user_id=row["user_id"], email=row["email"], display_name=row["display_name"],
+            created_at=row["created_at"], is_admin=bool(row["is_admin"]),
+            email_verified=bool(row["email_verified"]), mfa_enabled=bool(row["mfa_enabled"]),
+        ))
+
+    def oauth_session(self, provider: str, subject: str, email: str, display_name: str) -> AuthSessionResponse:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            identity = conn.execute(
+                "SELECT user_id FROM auth_identities WHERE provider = ? AND subject = ?",
+                (provider, subject),
+            ).fetchone()
+            user = conn.execute("SELECT user_id FROM auth_users WHERE email = ?", (email.lower(),)).fetchone()
+        if identity:
+            user_id = identity["user_id"]
+        elif user:
+            user_id = user["user_id"]
+        else:
+            created = self.create_user(email, secrets.token_urlsafe(32), display_name)
+            user_id = created.user_id
+        with self._connection() as conn:
+            conn.execute("UPDATE auth_users SET email_verified = 1 WHERE user_id = ?", (user_id,))
+            conn.execute(
+                "INSERT INTO auth_identities (provider, subject, user_id, created_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(provider, subject) DO NOTHING",
+                (provider, subject, user_id, now),
+            )
+        session = self.issue_session(user_id)
+        if not session:
+            raise ValueError("Unable to create OAuth session")
+        return session
+
+    def save_passkey_challenge(self, user_id: str, challenge: str, purpose: str) -> str:
+        challenge_id = secrets.token_urlsafe(24)
+        now = datetime.now(timezone.utc)
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO passkey_challenges (challenge_id, user_id, challenge, purpose, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (challenge_id, user_id, challenge, purpose, now.isoformat(), (now + timedelta(minutes=5)).isoformat()),
+            )
+        return challenge_id
+
+    def consume_passkey_challenge(self, challenge_id: str, purpose: str) -> dict | None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM passkey_challenges WHERE challenge_id = ? AND purpose = ? AND expires_at > ?",
+                (challenge_id, purpose, now),
+            ).fetchone()
+            conn.execute("DELETE FROM passkey_challenges WHERE challenge_id = ?", (challenge_id,))
+        return dict(row) if row else None
+
+    def passkeys_for_user(self, user_id: str) -> list[dict]:
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM passkey_credentials WHERE user_id = ? ORDER BY created_at", (user_id,)
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def passkey_user_by_email(self, email: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute("SELECT user_id FROM auth_users WHERE email = ?", (email.lower(),)).fetchone()
+        return dict(row) if row else None
+
+    def save_passkey(self, credential_id: str, user_id: str, name: str, public_key: str, sign_count: int, transports: list[str]) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO passkey_credentials (credential_id, user_id, name, public_key, sign_count, transports_json, created_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
+                (credential_id, user_id, name, public_key, sign_count, json.dumps(transports), datetime.now(timezone.utc).isoformat()),
+            )
+
+    def get_passkey(self, credential_id: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute("SELECT * FROM passkey_credentials WHERE credential_id = ?", (credential_id,)).fetchone()
+        return dict(row) if row else None
+
+    def update_passkey_counter(self, credential_id: str, sign_count: int) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "UPDATE passkey_credentials SET sign_count = ?, last_used_at = ? WHERE credential_id = ?",
+                (sign_count, datetime.now(timezone.utc).isoformat(), credential_id),
+            )
 
     def get_user_by_token(self, token: str) -> AuthUser | None:
         if not token.strip():
@@ -724,7 +980,7 @@ class DocumentStore:
             row = conn.execute(
                 """
                 SELECT u.user_id, u.email, u.display_name, u.created_at
-                    , u.is_admin, u.email_verified
+                    , u.is_admin, u.email_verified, u.mfa_enabled
                 FROM auth_sessions s
                 JOIN auth_users u ON u.user_id = s.user_id
                 WHERE s.token = ? AND s.expires_at > ?
@@ -741,12 +997,165 @@ class DocumentStore:
             created_at=row["created_at"],
             is_admin=bool(row["is_admin"]),
             email_verified=bool(row["email_verified"]),
+            mfa_enabled=bool(row["mfa_enabled"]),
         )
 
     def logout_session(self, token: str) -> AuthMessage:
         with self._connection() as conn:
             conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token.strip(),))
         return AuthMessage(message="Signed out successfully.")
+
+    def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT password_hash FROM auth_users WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if not row or not self._verify_password(current_password, row["password_hash"]):
+                return False
+            conn.execute(
+                "UPDATE auth_users SET password_hash = ? WHERE user_id = ?",
+                (self._hash_password(new_password), user_id),
+            )
+            conn.execute("DELETE FROM auth_sessions WHERE user_id = ?", (user_id,))
+        return True
+
+    def update_account(self, user_id: str, display_name: str) -> AuthUser | None:
+        with self._connection() as conn:
+            conn.execute(
+                "UPDATE auth_users SET display_name = ? WHERE user_id = ?",
+                (display_name.strip(), user_id),
+            )
+            row = conn.execute("SELECT * FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return None
+        return AuthUser(
+            user_id=row["user_id"], email=row["email"], display_name=row["display_name"],
+            created_at=row["created_at"], is_admin=bool(row["is_admin"]),
+            email_verified=bool(row["email_verified"]),
+            mfa_enabled=bool(row["mfa_enabled"]),
+        )
+
+    def export_user_data(self, user_id: str) -> dict:
+        with self._connection() as conn:
+            user = conn.execute(
+                "SELECT user_id, email, display_name, created_at, is_admin, email_verified, mfa_enabled FROM auth_users WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if not user:
+                return {}
+            profile = conn.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,)).fetchone()
+            follows = conn.execute("SELECT entity, created_at FROM user_follows WHERE user_id = ?", (user_id,)).fetchall()
+            history = conn.execute("SELECT query, categories_json, context_id, created_at FROM search_history WHERE user_id = ?", (user_id,)).fetchall()
+            sessions = conn.execute("SELECT context_id, label, created_at FROM saved_sessions WHERE user_id = ?", (user_id,)).fetchall()
+            alerts = conn.execute("SELECT query, categories_json, enabled, last_triggered_at FROM user_alerts WHERE user_id = ?", (user_id,)).fetchall()
+            bookmarks = conn.execute("SELECT source_json, created_at FROM user_bookmarks WHERE user_id = ?", (user_id,)).fetchall()
+            conversations = conn.execute("SELECT conversation_id, context_id, title, created_at, updated_at FROM conversations WHERE user_id = ?", (user_id,)).fetchall()
+            passkeys = conn.execute("SELECT credential_id, name, created_at, last_used_at FROM passkey_credentials WHERE user_id = ?", (user_id,)).fetchall()
+            identities = conn.execute("SELECT provider, created_at FROM auth_identities WHERE user_id = ?", (user_id,)).fetchall()
+        return {
+            "account": dict(user),
+            "profile": dict(profile) if profile else None,
+            "follows": [dict(row) for row in follows],
+            "search_history": [dict(row) for row in history],
+            "saved_sessions": [dict(row) for row in sessions],
+            "alerts": [dict(row) for row in alerts],
+            "bookmarks": [dict(row) for row in bookmarks],
+            "conversations": [dict(row) for row in conversations],
+            "passkeys": [dict(row) for row in passkeys],
+            "linked_identities": [dict(row) for row in identities],
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def revoke_other_sessions(self, user_id: str, current_token: str) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM auth_sessions WHERE user_id = ? AND token <> ?",
+                (user_id, current_token.strip()),
+            )
+
+    def set_mfa_secret(self, user_id: str, secret: str) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "UPDATE auth_users SET mfa_secret = ?, mfa_enabled = 0 WHERE user_id = ?",
+                (secret, user_id),
+            )
+
+    def enable_mfa(self, user_id: str, code: str) -> bool:
+        with self._connection() as conn:
+            row = conn.execute("SELECT mfa_secret FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
+            if not row or not row["mfa_secret"] or not verify_code(row["mfa_secret"], code):
+                return False
+            conn.execute("UPDATE auth_users SET mfa_enabled = 1 WHERE user_id = ?", (user_id,))
+        return True
+
+    def disable_mfa(self, user_id: str, code: str) -> bool:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT mfa_secret, mfa_enabled FROM auth_users WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if not row or not row["mfa_enabled"] or not verify_code(row["mfa_secret"] or "", code):
+                return False
+            conn.execute(
+                "UPDATE auth_users SET mfa_secret = NULL, mfa_enabled = 0 WHERE user_id = ?", (user_id,)
+            )
+        return True
+
+    def issue_email_change_token(self, user_id: str, new_email: str) -> tuple[str, str]:
+        normalized = new_email.strip().lower()
+        token = secrets.token_urlsafe(24)
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(hours=1)
+        with self._connection() as conn:
+            if conn.execute("SELECT 1 FROM auth_users WHERE email = ?", (normalized,)).fetchone():
+                raise ValueError("An account with this email already exists")
+            conn.execute("DELETE FROM auth_email_change_tokens WHERE user_id = ?", (user_id,))
+            conn.execute(
+                "INSERT INTO auth_email_change_tokens (token, user_id, new_email, created_at, expires_at, used_at) VALUES (?, ?, ?, ?, ?, NULL)",
+                (token, user_id, normalized, now.isoformat(), expires.isoformat()),
+            )
+        return token, expires.isoformat()
+
+    def confirm_email_change(self, token: str) -> AuthUser | None:
+        now = datetime.now(timezone.utc)
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM auth_email_change_tokens WHERE token = ?", (token.strip(),)
+            ).fetchone()
+            if not row or row["used_at"] or datetime.fromisoformat(row["expires_at"]) < now:
+                return None
+            try:
+                conn.execute(
+                    "UPDATE auth_users SET email = ?, email_verified = 1 WHERE user_id = ?",
+                    (row["new_email"], row["user_id"]),
+                )
+            except Exception:
+                return None
+            conn.execute(
+                "UPDATE auth_email_change_tokens SET used_at = ? WHERE token = ?",
+                (now.isoformat(), token.strip()),
+            )
+        return self.update_account(row["user_id"], self._display_name(row["user_id"]))
+
+    def _display_name(self, user_id: str) -> str:
+        with self._connection() as conn:
+            row = conn.execute("SELECT display_name FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
+        return row["display_name"] if row else "User"
+
+    def delete_account(self, user_id: str) -> None:
+        tables = [
+            "auth_sessions", "auth_verification_tokens", "auth_password_reset_tokens", "auth_email_change_tokens",
+            "user_profiles", "user_follows", "search_history", "saved_sessions",
+            "user_alerts", "alert_delivery_settings", "alert_delivery_attempts", "user_bookmarks", "contexts", "search_feedback", "conversations", "shared_contexts",
+            "auth_identities", "passkey_credentials", "passkey_challenges",
+        ]
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM conversation_messages WHERE conversation_id IN (SELECT conversation_id FROM conversations WHERE user_id = ?)",
+                (user_id,),
+            )
+            for table in tables:
+                conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM auth_users WHERE user_id = ?", (user_id,))
 
     def issue_verification_token(self, user_id: str) -> tuple[str, str]:
         token = secrets.token_urlsafe(24)
@@ -769,7 +1178,7 @@ class DocumentStore:
         with self._connection() as conn:
             row = conn.execute(
                 """
-                SELECT t.user_id, t.expires_at, t.used_at, u.email, u.display_name, u.created_at, u.is_admin
+                SELECT t.user_id, t.expires_at, t.used_at, u.email, u.display_name, u.created_at, u.is_admin, u.mfa_enabled
                 FROM auth_verification_tokens t
                 JOIN auth_users u ON u.user_id = t.user_id
                 WHERE t.token = ?
@@ -793,6 +1202,7 @@ class DocumentStore:
             created_at=row["created_at"],
             is_admin=bool(row["is_admin"]),
             email_verified=True,
+            mfa_enabled=bool(row["mfa_enabled"]),
         )
 
     def issue_password_reset_token(self, email: str) -> tuple[str, str] | None:
@@ -862,11 +1272,11 @@ class DocumentStore:
                 (user_id, query, json.dumps(categories), context_id, now_iso),
             )
 
-    def get_search_history(self, user_id: str, limit: int = 25) -> List[SearchHistoryItem]:
+    def get_search_history(self, user_id: str, limit: int = 25, offset: int = 0) -> List[SearchHistoryItem]:
         with self._connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM search_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
-                (user_id, limit),
+                "SELECT * FROM search_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
             ).fetchall()
         return [
             SearchHistoryItem(
@@ -879,6 +1289,16 @@ class DocumentStore:
             )
             for row in rows
         ]
+
+    def delete_search_history(self, user_id: str, history_id: int | None = None) -> None:
+        with self._connection() as conn:
+            if history_id is None:
+                conn.execute("DELETE FROM search_history WHERE user_id = ?", (user_id,))
+            else:
+                conn.execute(
+                    "DELETE FROM search_history WHERE user_id = ? AND id = ?",
+                    (user_id, history_id),
+                )
 
     def save_session(self, user_id: str, context_id: str, label: str = "") -> SavedSessionItem:
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -906,11 +1326,11 @@ class DocumentStore:
             created_at=row["created_at"],
         )
 
-    def get_saved_sessions(self, user_id: str, limit: int = 25) -> List[SavedSessionItem]:
+    def get_saved_sessions(self, user_id: str, limit: int = 25, offset: int = 0) -> List[SavedSessionItem]:
         with self._connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM saved_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
-                (user_id, limit),
+                "SELECT * FROM saved_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
             ).fetchall()
         return [
             SavedSessionItem(
@@ -922,6 +1342,12 @@ class DocumentStore:
             )
             for row in rows
         ]
+
+    def delete_saved_session(self, user_id: str, session_id: int) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM saved_sessions WHERE user_id = ? AND id = ?", (user_id, session_id)
+            )
 
     def record_source_result(self, source_name: str, category: str, item_count: int, error: str = "", latency_ms: float | None = None) -> None:
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -1127,6 +1553,25 @@ class DocumentStore:
             "stalest_success_at": stalest_at,
         }
 
+    def cleanup_expired(self) -> dict[str, int]:
+        """Remove expired credentials and retained transient search data."""
+        now = datetime.now(timezone.utc)
+        context_cutoff = (now - timedelta(days=settings.context_retention_days)).isoformat()
+        cache_cutoff = (now - timedelta(days=settings.query_cache_retention_days)).isoformat()
+        counts: dict[str, int] = {}
+        with self._connection() as conn:
+            statements = {
+                "sessions": ("DELETE FROM auth_sessions WHERE expires_at <= ?", (now.isoformat(),)),
+                "verification_tokens": ("DELETE FROM auth_verification_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", (now.isoformat(),)),
+                "reset_tokens": ("DELETE FROM auth_password_reset_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", (now.isoformat(),)),
+                "contexts": ("DELETE FROM contexts WHERE created_at < ?", (context_cutoff,)),
+                "query_cache": ("DELETE FROM query_cache WHERE updated_at < ?", (cache_cutoff,)),
+            }
+            for name, (sql, params) in statements.items():
+                cursor = conn.execute(sql, params)
+                counts[name] = max(0, int(cursor.rowcount or 0))
+        return counts
+
     def admin_snapshot(self, limit: int = 10) -> dict:
         with self._connection() as conn:
             counts = {
@@ -1199,6 +1644,14 @@ class DocumentStore:
             ).fetchall()
         return [row["entity"] for row in rows]
 
+    def remove_follow(self, user_id: str, entity: str) -> List[str]:
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM user_follows WHERE user_id = ? AND entity = ?",
+                (user_id, entity.strip()),
+            )
+        return self.get_follows(user_id)
+
     def add_alert(self, rule: AlertRule) -> AlertRule:
         with self._connection() as conn:
             cursor = conn.execute(
@@ -1228,13 +1681,32 @@ class DocumentStore:
             for row in rows
         ]
 
+    def update_alert(self, user_id: str, alert_id: int, rule: AlertRule) -> AlertRule | None:
+        with self._connection() as conn:
+            cursor = conn.execute(
+                "UPDATE user_alerts SET query = ?, categories_json = ?, enabled = ? WHERE id = ? AND user_id = ?",
+                (rule.query, json.dumps(rule.categories), int(rule.enabled), alert_id, user_id),
+            )
+            if not cursor.rowcount:
+                return None
+        return AlertRule(id=alert_id, user_id=user_id, query=rule.query, categories=rule.categories, enabled=rule.enabled)
+
+    def delete_alert(self, user_id: str, alert_id: int) -> bool:
+        with self._connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM user_alerts WHERE id = ? AND user_id = ?", (alert_id, user_id)
+            )
+            return bool(cursor.rowcount)
+
     def get_enabled_alerts(self) -> List[dict]:
         with self._connection() as conn:
             rows = conn.execute(
                 """
-                SELECT a.*, d.webhook_url, d.digest_mode, d.enabled AS delivery_enabled
+                SELECT a.*, d.webhook_url, d.digest_mode, d.enabled AS delivery_enabled,
+                       d.email_enabled, d.timezone, d.delivery_hour, u.email
                 FROM user_alerts a
                 LEFT JOIN alert_delivery_settings d ON d.user_id = a.user_id
+                JOIN auth_users u ON u.user_id = a.user_id
                 WHERE a.enabled = 1
                 """
             ).fetchall()
@@ -1250,6 +1722,10 @@ class DocumentStore:
                     "webhook_url": row["webhook_url"] or "",
                     "digest_mode": row["digest_mode"] or "daily",
                     "delivery_enabled": bool(row["delivery_enabled"]),
+                    "email_enabled": bool(row["email_enabled"]),
+                    "timezone": row["timezone"] or "UTC",
+                    "delivery_hour": int(row["delivery_hour"] or 9),
+                    "email": row["email"],
                 }
             )
         return alerts
@@ -1264,15 +1740,18 @@ class DocumentStore:
         with self._connection() as conn:
             conn.execute(
                 """
-                INSERT INTO alert_delivery_settings (user_id, webhook_url, digest_mode, enabled, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO alert_delivery_settings (user_id, webhook_url, digest_mode, enabled, email_enabled, timezone, delivery_hour, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     webhook_url = excluded.webhook_url,
                     digest_mode = excluded.digest_mode,
                     enabled = excluded.enabled,
+                    email_enabled = excluded.email_enabled,
+                    timezone = excluded.timezone,
+                    delivery_hour = excluded.delivery_hour,
                     updated_at = excluded.updated_at
                 """,
-                (settings_obj.user_id, settings_obj.webhook_url, settings_obj.digest_mode, int(settings_obj.enabled), now_iso),
+                (settings_obj.user_id, settings_obj.webhook_url, settings_obj.digest_mode, int(settings_obj.enabled), int(settings_obj.email_enabled), settings_obj.timezone, settings_obj.delivery_hour, now_iso),
             )
         return settings_obj
 
@@ -1286,24 +1765,42 @@ class DocumentStore:
             webhook_url=row["webhook_url"],
             digest_mode=row["digest_mode"],
             enabled=bool(row["enabled"]),
+            email_enabled=bool(row["email_enabled"]),
+            timezone=row["timezone"],
+            delivery_hour=int(row["delivery_hour"]),
         )
 
-    def add_bookmark(self, user_id: str, source: SourceDoc) -> BookmarkItem:
+    def record_alert_delivery(self, alert_id: int, user_id: str, channel: str, status: str, status_code: int | None = None, error: str = "") -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO alert_delivery_attempts (alert_id, user_id, channel, status, status_code, error, attempted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (alert_id, user_id, channel, status, status_code, error[:1000], datetime.now(timezone.utc).isoformat()),
+            )
+
+    def get_alert_deliveries(self, user_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM alert_delivery_attempts WHERE user_id = ? ORDER BY attempted_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_bookmark(self, user_id: str, source: SourceDoc, folder: str = "", tags: List[str] | None = None, notes: str = "") -> BookmarkItem:
         canonical_url = self.canonicalize_url(source.url, source.source, source.title)
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO user_bookmarks (id, user_id, canonical_url, source_json, created_at)
+                INSERT OR REPLACE INTO user_bookmarks (id, user_id, canonical_url, source_json, created_at, folder, tags_json, notes)
                 VALUES (
                     (SELECT id FROM user_bookmarks WHERE user_id = ? AND canonical_url = ?),
-                    ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
-                (user_id, canonical_url, user_id, canonical_url, json.dumps(source.model_dump(mode="json")), now_iso),
+                (user_id, canonical_url, user_id, canonical_url, json.dumps(source.model_dump(mode="json")), now_iso, folder.strip(), json.dumps(tags or []), notes.strip()),
             )
             row = conn.execute(
-                "SELECT id, source_json, created_at FROM user_bookmarks WHERE user_id = ? AND canonical_url = ?",
+                "SELECT * FROM user_bookmarks WHERE user_id = ? AND canonical_url = ?",
                 (user_id, canonical_url),
             ).fetchone()
         return BookmarkItem(
@@ -1311,13 +1808,24 @@ class DocumentStore:
             user_id=user_id,
             source=SourceDoc.model_validate(json.loads(row["source_json"])),
             saved_at=row["created_at"],
+            folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
         )
 
-    def get_bookmarks(self, user_id: str, limit: int = 200, offset: int = 0) -> List[BookmarkItem]:
+    def get_bookmarks(self, user_id: str, limit: int = 200, offset: int = 0, folder: str = "", query: str = "") -> List[BookmarkItem]:
+        clauses = ["user_id = ?"]
+        params: list = [user_id]
+        if folder.strip():
+            clauses.append("folder = ?")
+            params.append(folder.strip())
+        if query.strip():
+            clauses.append("(source_json LIKE ? OR notes LIKE ? OR tags_json LIKE ?)")
+            needle = f"%{query.strip()}%"
+            params.extend([needle, needle, needle])
+        params.extend([limit, offset])
         with self._connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM user_bookmarks WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                (user_id, limit, offset),
+                f"SELECT * FROM user_bookmarks WHERE {' AND '.join(clauses)} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                tuple(params),
             ).fetchall()
         return [
             BookmarkItem(
@@ -1325,9 +1833,24 @@ class DocumentStore:
                 user_id=row["user_id"],
                 source=SourceDoc.model_validate(json.loads(row["source_json"])),
                 saved_at=row["created_at"],
+                folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
             )
             for row in rows
         ]
+
+    def update_bookmark_metadata(self, user_id: str, bookmark_id: int, folder: str, tags: List[str], notes: str) -> BookmarkItem | None:
+        with self._connection() as conn:
+            cursor = conn.execute(
+                "UPDATE user_bookmarks SET folder = ?, tags_json = ?, notes = ? WHERE user_id = ? AND id = ?",
+                (folder.strip(), json.dumps(tags), notes.strip(), user_id, bookmark_id),
+            )
+            if not cursor.rowcount:
+                return None
+            row = conn.execute("SELECT * FROM user_bookmarks WHERE user_id = ? AND id = ?", (user_id, bookmark_id)).fetchone()
+        return BookmarkItem(
+            id=row["id"], user_id=user_id, source=SourceDoc.model_validate(json.loads(row["source_json"])),
+            saved_at=row["created_at"], folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
+        )
 
     def delete_bookmark(self, user_id: str, bookmark_id: int) -> None:
         with self._connection() as conn:
@@ -1347,6 +1870,127 @@ class DocumentStore:
                     created_at = excluded.created_at
                 """,
                 (context_id, user_id, query, payload, now_iso),
+            )
+
+    def add_search_feedback(
+        self, user_id: str, context_id: str, helpful: bool, comment: str = ""
+    ) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO search_feedback (user_id, context_id, helpful, comment, created_at) VALUES (?, ?, ?, ?, ?)",
+                (user_id, context_id, int(helpful), comment.strip(), datetime.now(timezone.utc).isoformat()),
+            )
+
+    def create_conversation(self, user_id: str, context_id: str, title: str = "") -> dict | None:
+        context = self.get_context(context_id, user_id)
+        if not context:
+            return None
+        conversation_id = secrets.token_urlsafe(18)
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO conversations (conversation_id, user_id, context_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (conversation_id, user_id, context_id, title.strip() or context[0][:200], now, now),
+            )
+        return {"conversation_id": conversation_id, "context_id": context_id, "title": title.strip() or context[0][:200], "created_at": now, "updated_at": now}
+
+    def add_conversation_message(self, conversation_id: str, user_id: str, role: str, content: str, key_points: List[str] | None = None) -> dict | None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            owner = conn.execute(
+                "SELECT 1 FROM conversations WHERE conversation_id = ? AND user_id = ?",
+                (conversation_id, user_id),
+            ).fetchone()
+            if not owner:
+                return None
+            conn.execute(
+                "INSERT INTO conversation_messages (conversation_id, role, content, key_points_json, created_at) VALUES (?, ?, ?, ?, ?)",
+                (conversation_id, role, content, json.dumps(key_points or []), now),
+            )
+            conn.execute("UPDATE conversations SET updated_at = ? WHERE conversation_id = ?", (now, conversation_id))
+        return {"role": role, "content": content, "key_points": key_points or [], "created_at": now}
+
+    def get_conversation(self, conversation_id: str, user_id: str) -> dict | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM conversations WHERE conversation_id = ? AND user_id = ?",
+                (conversation_id, user_id),
+            ).fetchone()
+            if not row:
+                return None
+            messages = conn.execute(
+                "SELECT * FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at, id",
+                (conversation_id,),
+            ).fetchall()
+        result = dict(row)
+        result["messages"] = [
+            {"id": item["id"], "role": item["role"], "content": item["content"], "key_points": json.loads(item["key_points_json"]), "created_at": item["created_at"]}
+            for item in messages
+        ]
+        return result
+
+    def list_conversations(self, user_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                (user_id, limit, offset),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def conversation_context(self, conversation_id: str, user_id: str) -> tuple[str, List[SourceDoc]] | None:
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT context_id FROM conversations WHERE conversation_id = ? AND user_id = ?",
+                (conversation_id, user_id),
+            ).fetchone()
+        return self.get_context(row["context_id"], user_id) if row else None
+
+    def share_context(self, context_id: str, user_id: str, ttl_days: int = 7) -> str | None:
+        if not self.get_context(context_id, user_id):
+            return None
+        token = secrets.token_urlsafe(24)
+        now = datetime.now(timezone.utc)
+        with self._connection() as conn:
+            conn.execute(
+                "INSERT INTO shared_contexts (share_token, context_id, user_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (token, context_id, user_id, now.isoformat(), (now + timedelta(days=ttl_days)).isoformat()),
+            )
+        return token
+
+    def get_shared_context(self, token: str) -> dict | None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._connection() as conn:
+            row = conn.execute(
+                "SELECT context_id, user_id FROM shared_contexts WHERE share_token = ? AND expires_at > ?",
+                (token, now),
+            ).fetchone()
+        if not row:
+            return None
+        context = self.get_context(row["context_id"], row["user_id"])
+        if not context:
+            return None
+        query, sources = context
+        return {"query": query, "sources": [source.model_dump(mode="json") for source in sources]}
+
+    def acquire_scheduler_lock(self, name: str, owner: str, ttl_seconds: int) -> bool:
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(seconds=max(5, ttl_seconds))).isoformat()
+        with self._connection() as conn:
+            row = conn.execute(
+                """
+                INSERT INTO scheduler_locks (lock_name, owner, expires_at) VALUES (?, ?, ?)
+                ON CONFLICT(lock_name) DO UPDATE SET owner = excluded.owner, expires_at = excluded.expires_at
+                WHERE scheduler_locks.expires_at < ? OR scheduler_locks.owner = ?
+                RETURNING owner
+                """,
+                (name, owner, expires_at, now.isoformat(), owner),
+            ).fetchone()
+        return bool(row and row["owner"] == owner)
+
+    def release_scheduler_lock(self, name: str, owner: str) -> None:
+        with self._connection() as conn:
+            conn.execute(
+                "DELETE FROM scheduler_locks WHERE lock_name = ? AND owner = ?", (name, owner)
             )
 
     def get_context(self, context_id: str, user_id: str) -> tuple[str, List[SourceDoc]] | None:

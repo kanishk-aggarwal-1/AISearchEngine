@@ -81,6 +81,7 @@ class PhaseFiveTests(unittest.TestCase):
             with patch("backend.app.routers.auth.store", store), \
                  patch("backend.app.routers.admin.store", store), \
                  patch("backend.app.dependencies.store", store), \
+                 patch("backend.app.config.settings.bootstrap_admin_email", "admin@example.com"), \
                  patch("backend.app.main.cache", fake_cache), \
                  patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
                 client = TestClient(main_module.app)

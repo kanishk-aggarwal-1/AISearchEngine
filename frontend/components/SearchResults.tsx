@@ -21,6 +21,10 @@ interface Props {
   onExpandRecency: () => void;
   onSuggestedQuery: (q: string) => void;
   onRunFollowUp: () => void;
+  onFeedback: (helpful: boolean) => void;
+  onCreateConversation: () => void;
+  onShare: () => void;
+  shareUrl: string;
 }
 
 export default function SearchResults({
@@ -28,7 +32,8 @@ export default function SearchResults({
   followUpQuestion, setFollowUpQuestion, followUpResponse,
   sessionLabel, setSessionLabel, onSaveSession,
   onCreateAlert, onSetFollowEntity, onBookmark, onExplainPaper,
-  onResetFilters, onExpandRecency, onSuggestedQuery, onRunFollowUp,
+  onResetFilters, onExpandRecency, onSuggestedQuery, onRunFollowUp, onFeedback,
+  onCreateConversation, onShare, shareUrl,
 }: Props) {
   // The backend runs on a free tier that sleeps; first request can take ~30s
   // to wake. Surface a friendly message once the wait crosses 8 seconds.
@@ -85,12 +90,18 @@ export default function SearchResults({
           <p className="muted">Provider: {result.explanation_provider}</p>
           <p className="muted">{appliedFiltersText}</p>
           <p className="formatted-block">{result.explanation}</p>
+          {(result.citation_warnings || []).map((warning) => <p className="error" key={warning}>{warning}</p>)}
           <div className="hero-action-strip">
             <button type="button" className="mini-button" onClick={() => onSaveSession(result.context_id, session?.token ?? null)} disabled={!result.context_id || !session?.token}>Save context</button>
             <button type="button" className="mini-button" onClick={() => onCreateAlert()}>Alert on this query</button>
             <button type="button" className="mini-button" onClick={onSetFollowEntity}>Follow this topic</button>
+            <button type="button" className="mini-button" onClick={() => onFeedback(true)}>Helpful</button>
+            <button type="button" className="mini-button" onClick={() => onFeedback(false)}>Needs work</button>
+            <button type="button" className="mini-button" onClick={onCreateConversation} disabled={!session?.token}>Start conversation</button>
+            <button type="button" className="mini-button" onClick={onShare} disabled={!session?.token}>Share</button>
             {result.sources?.[0] && <button type="button" className="mini-button" onClick={() => onBookmark(result.sources[0])}>Save top source</button>}
           </div>
+          {shareUrl && <p><a href={shareUrl}>Open shared context</a></p>}
           <h3>Why it matters</h3><p>{result.why_it_matters}</p>
           <h3>What changed last week</h3><p>{result.what_changed_last_week}</p>
           <h3>Claim confidence</h3><p>{Math.round((result.claim_confidence || 0) * 100)}%</p>

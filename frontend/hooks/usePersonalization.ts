@@ -12,6 +12,9 @@ const defaultDelivery: AlertDeliverySettings = {
   webhook_url: "",
   digest_mode: "daily",
   enabled: false,
+  email_enabled: false,
+  timezone: "UTC",
+  delivery_hour: 9,
 };
 
 export function usePersonalization(
@@ -28,6 +31,9 @@ export function usePersonalization(
   const [delivery, setDelivery] = useState<AlertDeliverySettings>(defaultDelivery);
   const [deliveryTest, setDeliveryTest] = useState<{ ok: boolean; preview_only?: boolean; status_code?: number } | null>(null);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [bookmarkFolder, setBookmarkFolder] = useState("");
+  const [bookmarkTags, setBookmarkTags] = useState("");
+  const [bookmarkNotes, setBookmarkNotes] = useState("");
 
   /**
    * Returns true when the user is signed in.
@@ -75,11 +81,18 @@ export function usePersonalization(
       return;
     }
     try {
-      const r = await apiFetch(`/users/${activeUserId}/bookmarks`);
+      const r = await apiFetch(`/users/${activeUserId}/bookmarks?limit=12&offset=0`);
       if (!r.ok) return;
       setBookmarks((await r.json() as BookmarkItem[]) || []);
     } catch { /* ignore */ }
   }, [apiFetch, activeUserId, requireAuth]);
+
+  const loadMoreBookmarks = useCallback(async () => {
+    const r = await apiFetch(`/users/${activeUserId}/bookmarks?limit=12&offset=${bookmarks.length}`);
+    if (!r.ok) return;
+    const items = (await r.json() as BookmarkItem[]) || [];
+    setBookmarks((current) => [...current, ...items]);
+  }, [apiFetch, activeUserId, bookmarks.length]);
 
   const loadDelivery = useCallback(async () => {
     if (!requireAuth()) {
@@ -117,6 +130,12 @@ export function usePersonalization(
     }
   }, [apiFetch, activeUserId, followEntity, requireAuth, onError]);
 
+  const removeFollow = useCallback(async (entity: string) => {
+    if (!requireAuth()) return;
+    const r = await apiFetch(`/users/${activeUserId}/follows/${encodeURIComponent(entity)}`, { method: "DELETE" });
+    if (r.ok) setFollowed((await r.json()).entities || []);
+  }, [apiFetch, activeUserId, requireAuth]);
+
   const createAlert = useCallback(async (query: string, categories: Category[]) => {
     const q = (typeof query === "string" ? query : alertQuery).trim();
     if (!q) return;
@@ -150,6 +169,21 @@ export function usePersonalization(
     }
   }, [apiFetch, activeUserId, delivery, requireAuth, onError, onInfo]);
 
+  const deleteAlert = useCallback(async (alertId: number) => {
+    if (!requireAuth()) return;
+    const r = await apiFetch(`/users/${activeUserId}/alerts/${alertId}`, { method: "DELETE" });
+    if (r.ok) await refreshAlerts();
+  }, [apiFetch, activeUserId, requireAuth, refreshAlerts]);
+
+  const toggleAlert = useCallback(async (alert: AlertRule) => {
+    if (alert.id == null || !requireAuth()) return;
+    const r = await apiFetch(`/users/${activeUserId}/alerts/${alert.id}`, {
+      method: "PUT",
+      body: JSON.stringify({ ...alert, user_id: activeUserId, enabled: !alert.enabled }),
+    });
+    if (r.ok) await refreshAlerts();
+  }, [apiFetch, activeUserId, requireAuth, refreshAlerts]);
+
   const testDelivery = useCallback(async () => {
     if (!requireAuth("Please sign in before testing alert delivery.")) return;
     try {
@@ -166,14 +200,21 @@ export function usePersonalization(
     try {
       const r = await apiFetch(`/users/${activeUserId}/bookmarks`, {
         method: "POST",
-        body: JSON.stringify({ user_id: activeUserId, source }),
+        body: JSON.stringify({ user_id: activeUserId, source, folder: bookmarkFolder, tags: bookmarkTags.split(",").map((tag) => tag.trim()).filter(Boolean), notes: bookmarkNotes }),
       });
       if (!r.ok) throw new Error("Unable to save bookmark");
       await loadBookmarks();
     } catch (err) {
       onError?.((err as Error).message || "Unable to save bookmark");
     }
-  }, [apiFetch, activeUserId, requireAuth, onError, loadBookmarks]);
+  }, [apiFetch, activeUserId, requireAuth, onError, loadBookmarks, bookmarkFolder, bookmarkTags, bookmarkNotes]);
+
+  const updateBookmark = useCallback(async (bookmarkId: number, folder: string, tags: string[], notes: string) => {
+    const r = await apiFetch(`/users/${activeUserId}/bookmarks/${bookmarkId}`, {
+      method: "PUT", body: JSON.stringify({ folder, tags, notes }),
+    });
+    if (r.ok) await loadBookmarks();
+  }, [apiFetch, activeUserId, loadBookmarks]);
 
   const removeBookmark = useCallback(async (bookmarkId: number) => {
     if (!requireAuth()) return;
@@ -187,8 +228,9 @@ export function usePersonalization(
     followEntity, setFollowEntity, followed,
     alertQuery, setAlertQuery, alerts,
     delivery, setDelivery, deliveryTest,
-    bookmarks,
+    bookmarks, bookmarkFolder, setBookmarkFolder, bookmarkTags, setBookmarkTags, bookmarkNotes, setBookmarkNotes,
     refreshFollows, refreshAlerts,
-    addFollow, createAlert, saveDelivery, testDelivery, addBookmark, removeBookmark,
+    addFollow, removeFollow, createAlert, deleteAlert, toggleAlert, saveDelivery, testDelivery, addBookmark, updateBookmark, removeBookmark,
+    loadMoreBookmarks,
   };
 }

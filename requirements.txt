@@ -6,6 +6,7 @@ httpx==0.28.1
 # ── Validation / settings ────────────────────────────────────────────────────
 pydantic[email]==2.12.5
 pydantic-settings==2.13.1
+webauthn==3.0.0
 
 # ── Ingestion ────────────────────────────────────────────────────────────────
 feedparser==6.0.12

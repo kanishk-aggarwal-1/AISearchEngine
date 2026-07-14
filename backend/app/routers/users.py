@@ -2,14 +2,17 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from typing import List
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend.app.config import settings
 from backend.app.container import store
 from backend.app.dependencies import current_user, require_own_user
+from backend.app.services.webhook_security import UnsafeWebhookURL, validate_webhook_url
 from backend.app.models import (
     AlertDeliverySettings,
     AlertRule,
     BookmarkItem,
+    BookmarkMetadataRequest,
     BookmarkRequest,
     FollowRequest,
     FollowResponse,
@@ -55,6 +58,12 @@ async def get_follows(request: Request, user_id: str, limit: int = 200, offset: 
     return FollowResponse(user_id=user_id, entities=store.get_follows(user_id, limit=limit, offset=offset))
 
 
+@router.delete("/users/{user_id}/follows/{entity}", response_model=FollowResponse)
+async def remove_follow(request: Request, user_id: str, entity: str) -> FollowResponse:
+    require_own_user(request, user_id)
+    return FollowResponse(user_id=user_id, entities=store.remove_follow(user_id, entity))
+
+
 @router.post("/users/{user_id}/alerts", response_model=AlertRule)
 async def add_alert(request: Request, user_id: str, rule: AlertRule) -> AlertRule:
     require_own_user(request, user_id)
@@ -71,6 +80,25 @@ async def get_alerts(request: Request, user_id: str, limit: int = 200, offset: i
     return store.get_alerts(user_id, limit=limit, offset=offset)
 
 
+@router.put("/users/{user_id}/alerts/{alert_id}", response_model=AlertRule)
+async def update_alert(request: Request, user_id: str, alert_id: int, rule: AlertRule) -> AlertRule:
+    require_own_user(request, user_id)
+    if rule.user_id != user_id:
+        raise HTTPException(status_code=400, detail="Path user_id must match payload user_id")
+    updated = store.update_alert(user_id, alert_id, rule)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return updated
+
+
+@router.delete("/users/{user_id}/alerts/{alert_id}")
+async def delete_alert(request: Request, user_id: str, alert_id: int) -> dict:
+    require_own_user(request, user_id)
+    if not store.delete_alert(user_id, alert_id):
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"ok": True}
+
+
 @router.get("/users/{user_id}/alert-delivery", response_model=AlertDeliverySettings)
 async def get_alert_delivery(request: Request, user_id: str) -> AlertDeliverySettings:
     require_own_user(request, user_id)
@@ -84,7 +112,22 @@ async def put_alert_delivery(
     require_own_user(request, user_id)
     if payload.user_id != user_id:
         raise HTTPException(status_code=400, detail="Path user_id must match payload user_id")
+    try:
+        ZoneInfo(payload.timezone)
+    except ZoneInfoNotFoundError:
+        raise HTTPException(status_code=400, detail="Unknown timezone") from None
+    if payload.webhook_url:
+        try:
+            payload.webhook_url = await validate_webhook_url(payload.webhook_url)
+        except UnsafeWebhookURL as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     return store.upsert_alert_delivery(payload)
+
+
+@router.get("/users/{user_id}/alert-deliveries")
+async def get_alert_deliveries(request: Request, user_id: str, limit: int = 50, offset: int = 0) -> list[dict]:
+    require_own_user(request, user_id)
+    return store.get_alert_deliveries(user_id, max(1, min(limit, 100)), max(0, offset))
 
 
 @router.post("/users/{user_id}/alert-delivery/test")
@@ -100,8 +143,11 @@ async def test_alert_delivery(request: Request, user_id: str) -> dict:
     }
     if delivery.enabled and delivery.webhook_url:
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds)) as client:
-                response = await client.post(delivery.webhook_url, json=preview)
+            target = await validate_webhook_url(delivery.webhook_url)
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_seconds), follow_redirects=False
+            ) as client:
+                response = await client.post(target, json=preview)
             return {"ok": response.status_code < 400, "status_code": response.status_code, "preview": preview}
         except Exception as exc:
             return {"ok": False, "error": str(exc), "preview": preview}
@@ -113,15 +159,24 @@ async def add_bookmark(request: Request, user_id: str, payload: BookmarkRequest)
     require_own_user(request, user_id)
     if payload.user_id != user_id:
         raise HTTPException(status_code=400, detail="Path user_id must match payload user_id")
-    return store.add_bookmark(user_id, payload.source)
+    return store.add_bookmark(user_id, payload.source, payload.folder, payload.tags, payload.notes)
 
 
 @router.get("/users/{user_id}/bookmarks", response_model=List[BookmarkItem])
-async def get_bookmarks(request: Request, user_id: str, limit: int = 200, offset: int = 0) -> List[BookmarkItem]:
+async def get_bookmarks(request: Request, user_id: str, limit: int = 200, offset: int = 0, folder: str = "", q: str = "") -> List[BookmarkItem]:
     require_own_user(request, user_id)
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
-    return store.get_bookmarks(user_id, limit=limit, offset=offset)
+    return store.get_bookmarks(user_id, limit=limit, offset=offset, folder=folder, query=q)
+
+
+@router.put("/users/{user_id}/bookmarks/{bookmark_id}", response_model=BookmarkItem)
+async def update_bookmark(request: Request, user_id: str, bookmark_id: int, payload: BookmarkMetadataRequest) -> BookmarkItem:
+    require_own_user(request, user_id)
+    item = store.update_bookmark_metadata(user_id, bookmark_id, payload.folder, payload.tags, payload.notes)
+    if not item:
+        raise HTTPException(status_code=404, detail="Bookmark not found")
+    return item
 
 
 @router.delete("/users/{user_id}/bookmarks/{bookmark_id}")
@@ -134,15 +189,29 @@ async def delete_bookmark(request: Request, user_id: str, bookmark_id: int) -> d
 # ── /me/* ────────────────────────────────────────────────────────────────────
 
 @router.get("/me/search-history", response_model=List[SearchHistoryItem])
-async def my_search_history(request: Request, limit: int = 25) -> List[SearchHistoryItem]:
+async def my_search_history(request: Request, limit: int = 25, offset: int = 0) -> List[SearchHistoryItem]:
     user = current_user(request)
-    return store.get_search_history(user.user_id, limit=max(1, min(limit, 100)))
+    return store.get_search_history(user.user_id, limit=max(1, min(limit, 100)), offset=max(0, offset))
+
+
+@router.delete("/me/search-history")
+async def clear_my_search_history(request: Request) -> dict:
+    user = current_user(request)
+    store.delete_search_history(user.user_id)
+    return {"ok": True}
+
+
+@router.delete("/me/search-history/{history_id}")
+async def delete_my_search_history(request: Request, history_id: int) -> dict:
+    user = current_user(request)
+    store.delete_search_history(user.user_id, history_id)
+    return {"ok": True}
 
 
 @router.get("/me/saved-sessions", response_model=List[SavedSessionItem])
-async def my_saved_sessions(request: Request, limit: int = 25) -> List[SavedSessionItem]:
+async def my_saved_sessions(request: Request, limit: int = 25, offset: int = 0) -> List[SavedSessionItem]:
     user = current_user(request)
-    return store.get_saved_sessions(user.user_id, limit=max(1, min(limit, 100)))
+    return store.get_saved_sessions(user.user_id, limit=max(1, min(limit, 100)), offset=max(0, offset))
 
 
 @router.post("/me/saved-sessions/{context_id}", response_model=SavedSessionItem)
@@ -150,7 +219,26 @@ async def save_my_session(
     request: Request, context_id: str, payload: SaveSessionRequest
 ) -> SavedSessionItem:
     user = current_user(request)
+    if not store.get_context(context_id, user.user_id):
+        raise HTTPException(status_code=404, detail="Search context not found")
     return store.save_session(user.user_id, context_id, payload.label)
+
+
+@router.get("/me/saved-sessions/{context_id}/context")
+async def open_my_saved_session(request: Request, context_id: str) -> dict:
+    user = current_user(request)
+    context = store.get_context(context_id, user.user_id)
+    if not context:
+        raise HTTPException(status_code=404, detail="Saved context not found")
+    query, sources = context
+    return {"context_id": context_id, "query": query, "sources": [item.model_dump(mode="json") for item in sources]}
+
+
+@router.delete("/me/saved-sessions/{session_id}")
+async def delete_my_saved_session(request: Request, session_id: int) -> dict:
+    user = current_user(request)
+    store.delete_saved_session(user.user_id, session_id)
+    return {"ok": True}
 
 
 @router.get("/me/watchlist", response_model=FollowResponse)

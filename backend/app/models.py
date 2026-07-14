@@ -43,6 +43,8 @@ class SourceDoc(BaseModel):
     published_at: datetime | None = None
 
     source_type: SourceType = "news"
+    language: str = "en"
+    region: str = "global"
     bias_label: BiasLabel = "reporting"
     credibility_score: float = 0.5
     confidence_score: float = 0.5
@@ -94,6 +96,13 @@ class AppliedFilters(BaseModel):
     source_filter: List[str] = Field(default_factory=list)
     source_type_filter: List[SourceType] = Field(default_factory=list)
     sort_by: SortBy = "relevance"
+    domain_filter: List[str] = Field(default_factory=list)
+    author_filter: List[str] = Field(default_factory=list)
+    min_credibility: float | None = None
+    language_filter: List[str] = Field(default_factory=list)
+    region_filter: List[str] = Field(default_factory=list)
+    date_from: datetime | None = None
+    date_to: datetime | None = None
 
 
 class UserProfile(BaseModel):
@@ -115,11 +124,23 @@ class AlertDeliverySettings(BaseModel):
     webhook_url: str = ""
     digest_mode: Literal["instant", "daily"] = "daily"
     enabled: bool = False
+    email_enabled: bool = False
+    timezone: str = "UTC"
+    delivery_hour: int = Field(default=9, ge=0, le=23)
 
 
 class BookmarkRequest(BaseModel):
     user_id: str
     source: SourceDoc
+    folder: str = Field(default="", max_length=100)
+    tags: List[str] = Field(default_factory=list)
+    notes: str = Field(default="", max_length=2000)
+
+
+class BookmarkMetadataRequest(BaseModel):
+    folder: str = Field(default="", max_length=100)
+    tags: List[str] = Field(default_factory=list)
+    notes: str = Field(default="", max_length=2000)
 
 
 class BookmarkItem(BaseModel):
@@ -127,6 +148,9 @@ class BookmarkItem(BaseModel):
     user_id: str
     source: SourceDoc
     saved_at: str | None = None
+    folder: str = ""
+    tags: List[str] = Field(default_factory=list)
+    notes: str = ""
 
 
 _PASSWORD_RE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$")
@@ -148,6 +172,7 @@ class AuthRegisterRequest(BaseModel):
 class AuthLoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    otp_code: str = Field(default="", max_length=8)
 
 
 class AuthUser(BaseModel):
@@ -157,6 +182,7 @@ class AuthUser(BaseModel):
     created_at: str
     is_admin: bool = False
     email_verified: bool = False
+    mfa_enabled: bool = False
 
 
 class AuthSessionResponse(BaseModel):
@@ -183,6 +209,44 @@ class PasswordResetConfirmRequest(BaseModel):
         if not _PASSWORD_RE.match(v):
             raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
         return v
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_complexity(cls, v: str) -> str:
+        if not _PASSWORD_RE.match(v):
+            raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
+        return v
+
+
+class UpdateAccountRequest(BaseModel):
+    display_name: str = Field(min_length=2, max_length=80)
+
+
+class MfaCodeRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=8)
+
+
+class OAuthGoogleRequest(BaseModel):
+    id_token: str = Field(min_length=20, max_length=8192)
+
+
+class PasskeyAuthenticationBeginRequest(BaseModel):
+    email: EmailStr
+
+
+class PasskeyFinishRequest(BaseModel):
+    challenge_id: str = Field(min_length=16, max_length=200)
+    credential: dict
+    name: str = Field(default="Passkey", max_length=100)
+
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
 
 
 class TokenConfirmRequest(BaseModel):
@@ -266,6 +330,13 @@ class SearchRequest(BaseModel):
     source_filter: List[str] = Field(default_factory=list)
     source_type_filter: List[SourceType] = Field(default_factory=list)
     sort_by: SortBy = "relevance"
+    domain_filter: List[str] = Field(default_factory=list)
+    author_filter: List[str] = Field(default_factory=list)
+    min_credibility: float | None = Field(default=None, ge=0, le=1)
+    language_filter: List[str] = Field(default_factory=list)
+    region_filter: List[str] = Field(default_factory=list)
+    date_from: datetime | None = None
+    date_to: datetime | None = None
 
 
 class SearchResponse(BaseModel):
@@ -286,6 +357,7 @@ class SearchResponse(BaseModel):
     # "semantic" when real embeddings rank results, "keyword" when the
     # hash-based lexical fallback is in use. Lets the UI be honest about mode.
     search_mode: str = "keyword"
+    citation_warnings: List[str] = Field(default_factory=list)
 
 
 class FollowRequest(BaseModel):
@@ -321,3 +393,18 @@ class CompareRequest(BaseModel):
     source_type_filter: List[SourceType] = Field(default_factory=list)
     sort_by: SortBy = "relevance"
 
+
+class SearchFeedbackRequest(BaseModel):
+    context_id: str = Field(min_length=8, max_length=128)
+    helpful: bool
+    comment: str = Field(default="", max_length=1000)
+
+
+class ConversationCreateRequest(BaseModel):
+    context_id: str
+    title: str = Field(default="", max_length=200)
+
+
+class ConversationMessageRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=2000)
+    explanation_mode: ExplanationMode = "beginner"
