@@ -125,7 +125,7 @@ class RetrieverService:
         tokens = {self._normalize_token(token) for token in text.split() if self._normalize_token(token)}
         return {token for token in tokens if token not in self.STOPWORDS and len(token) > 1}
 
-    def _detect_intent(self, query_tokens: set[str]) -> str:
+    def _classify_query_category(self, query_tokens: set[str]) -> str:
         if query_tokens.intersection(self.WORLD_NEWS_TERMS):
             return "general"
         if query_tokens.intersection(self.SPORTS_TERMS):
@@ -145,7 +145,7 @@ class RetrieverService:
     def analyze_query(self, query: str, categories: List[str] | None = None) -> dict[str, object]:
         raw = " ".join((query or "").split()).strip()
         query_tokens = self._tokenize(raw)
-        intent = self._detect_intent(query_tokens)
+        intent = self._classify_query_category(query_tokens)
         rewritten = raw
 
         if raw:
@@ -187,7 +187,7 @@ class RetrieverService:
         chunk_hits_by_doc = chunk_hits_by_doc or {}
         query_tokens = self._tokenize(query)
         expanded_query_tokens = self._expanded_tokens(query_tokens)
-        intent = self._detect_intent(query_tokens)
+        intent = self._classify_query_category(query_tokens)
         query_embedding = query_embedding or await self.embedding_service.embed(query)
         now = datetime.now(tz=timezone.utc)
 
@@ -260,7 +260,7 @@ class RetrieverService:
             doc.personalization_score = round(float(personalization), 4)
             doc.total_score = round(float(total), 4)
 
-        ranked = sorted(docs, key=lambda item: item.total_score, reverse=True)
+        ranked = sorted(docs, key=lambda doc: doc.total_score, reverse=True)
         ranked = [doc for doc in ranked if self._is_relevant(doc, query_tokens, intent)]
         ranked = self._diversify_sources(ranked)
         top_docs = ranked[:top_k]
@@ -295,7 +295,7 @@ class RetrieverService:
             chunk.lexical_score = round(float(lexical), 4)
             chunk.total_score = round(float(total), 4)
 
-        ranked = sorted(chunks, key=lambda item: item.total_score, reverse=True)
+        ranked = sorted(chunks, key=lambda chunk: chunk.total_score, reverse=True)
         return ranked[: settings.chunk_top_k], computed_embeddings, query_embedding
 
     def _category_alignment(self, intent: str, category: str) -> float:
@@ -306,7 +306,7 @@ class RetrieverService:
         return -0.4
 
     def _is_relevant(self, doc: SourceDoc, query_tokens: set[str], intent: str) -> bool:
-        # Keep broad queries from falling back to unrelated fresh documents.
+        # Exclude category-mismatched docs unless they have strong lexical overlap.
         if intent != "mixed" and doc.category != intent and doc.lexical_score < 2:
             return False
         if doc.lexical_score >= 1:
@@ -326,7 +326,7 @@ class RetrieverService:
             doc.total_score = round(float(doc.total_score - (settings.source_diversity_penalty * count)), 4)
             rescored.append(doc)
             seen_sources[doc.source.lower()] = count + 1
-        rescored.sort(key=lambda item: item.total_score, reverse=True)
+        rescored.sort(key=lambda doc: doc.total_score, reverse=True)
         for doc in rescored:
             if any(existing.url == doc.url for existing in diversified):
                 continue
