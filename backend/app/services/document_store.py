@@ -881,31 +881,16 @@ class DocumentStore:
             if bool(row["mfa_enabled"]) and not verify_code(row["mfa_secret"] or "", otp_code.strip()):
                 self.logger.warning("audit login_mfa_failed user_id=%s", row["user_id"])
                 return None
-            token = secrets.token_urlsafe(32)
-            now = datetime.now(timezone.utc)
-            now_iso = now.isoformat()
-            expires_iso = (now + timedelta(days=30)).isoformat()
-            conn.execute(
-                """
-                INSERT INTO auth_sessions (token, user_id, created_at, last_seen_at, expires_at)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (token, row["user_id"], now_iso, now_iso, expires_iso),
-            )
+            token = self._create_session(conn, row["user_id"])
         self.logger.info("audit login_success user_id=%s", row["user_id"])
         return AuthSessionResponse(token=token, user=self._row_to_user(row))
 
     def issue_session(self, user_id: str) -> AuthSessionResponse | None:
-        now = datetime.now(timezone.utc)
         with self._connection() as conn:
             row = conn.execute("SELECT * FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
             if not row:
                 return None
-            token = secrets.token_urlsafe(32)
-            conn.execute(
-                "INSERT INTO auth_sessions (token, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-                (token, user_id, now.isoformat(), now.isoformat(), (now + timedelta(days=30)).isoformat()),
-            )
+            token = self._create_session(conn, user_id)
         return AuthSessionResponse(token=token, user=self._row_to_user(row))
 
     def oauth_session(self, provider: str, subject: str, email: str, display_name: str) -> AuthSessionResponse:
@@ -2215,3 +2200,15 @@ class DocumentStore:
             return False
         digest = pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 120000).hex()
         return secrets.compare_digest(digest, expected)
+
+    @staticmethod
+    def _create_session(conn: sqlite3.Connection, user_id: str) -> str:
+        token = secrets.token_urlsafe(32)
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        expires_iso = (now + timedelta(days=30)).isoformat()
+        conn.execute(
+            "INSERT INTO auth_sessions (token, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+            (token, user_id, now_iso, now_iso, expires_iso),
+        )
+        return token
