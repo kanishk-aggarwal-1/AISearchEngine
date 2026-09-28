@@ -227,7 +227,7 @@ async def save_my_session(request: Request, context_id: str, payload: SaveSessio
 
 
 @router.get("/me/saved-sessions/{context_id}/context")
-async def open_my_saved_session(request: Request, context_id: str) -> dict:
+async def get_saved_session_context(request: Request, context_id: str) -> dict:
     user = current_user(request)
     context = store.get_context(context_id, user.user_id)
     if not context:

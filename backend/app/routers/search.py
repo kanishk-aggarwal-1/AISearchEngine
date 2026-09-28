@@ -196,12 +196,12 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         cached = await cache.get_query_cache(cache_key)
         if cached:
             metrics.inc("search.cache_hit.redis")
-            p = json.loads(cached)
-            p.setdefault("explanation_provider", "fallback")
-            p.setdefault("applied_filters", AppliedFilters().model_dump())
-            p.setdefault("suggested_queries", [])
+            cached_payload = json.loads(cached)
+            cached_payload.setdefault("explanation_provider", "fallback")
+            cached_payload.setdefault("applied_filters", AppliedFilters().model_dump())
+            cached_payload.setdefault("suggested_queries", [])
             # Validate first so _citation_coverage always receives SourceDoc objects.
-            response = SearchResponse.model_validate(p)
+            response = SearchResponse.model_validate(cached_payload)
             await metrics_store.record_search(
                 latency_ms=(time.perf_counter() - start) * 1000,
                 cache_hit=True,
@@ -213,13 +213,12 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         cached = await asyncio.to_thread(store.get_query_cache, cache_key, settings.query_cache_minutes)
         if cached:
             metrics.inc("search.cache_hit.sqlite")
-            p = json.loads(cached)
-            p.setdefault("explanation_provider", "fallback")
-            p.setdefault("applied_filters", AppliedFilters().model_dump())
-            p.setdefault("suggested_queries", [])
-            await cache.put_query_cache(cache_key, p, settings.query_cache_minutes)
-            # Validate first so _citation_coverage always receives SourceDoc objects.
-            response = SearchResponse.model_validate(p)
+            cached_payload = json.loads(cached)
+            cached_payload.setdefault("explanation_provider", "fallback")
+            cached_payload.setdefault("applied_filters", AppliedFilters().model_dump())
+            cached_payload.setdefault("suggested_queries", [])
+            await cache.put_query_cache(cache_key, cached_payload, settings.query_cache_minutes)
+            response = SearchResponse.model_validate(cached_payload)
             await metrics_store.record_search(
                 latency_ms=(time.perf_counter() - start) * 1000,
                 cache_hit=True,

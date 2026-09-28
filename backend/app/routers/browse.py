@@ -16,13 +16,13 @@ router = APIRouter()
 # ── Shared helpers used by browse, sports, and research ──────────────────────
 
 
-def topic_summary(docs: List[SourceDoc]) -> List[str]:
+def extract_top_entity_tags(docs: List[SourceDoc]) -> List[str]:
     counter: Counter = Counter()
     for doc in docs[:20]:
         for tag in doc.entity_tags[:4]:
             if len(tag) >= 3:
                 counter[tag] += 1
-    return [item for item, _ in counter.most_common(8)]
+    return [tag for tag, _ in counter.most_common(8)]
 
 
 def filter_recent_docs(docs: List[SourceDoc], recency_days: int) -> List[SourceDoc]:
@@ -82,7 +82,7 @@ async def latest_headlines_for_category(category: Category, limit: int, recency_
     return [doc.model_dump(mode="json") for doc in fresh_docs[:limit]]
 
 
-def _trending_payload(categories: List[Category], recency_days: int = 7, limit: int = 10) -> dict:
+def _build_trending_response(categories: List[Category], recency_days: int = 7, limit: int = 10) -> dict:
     docs = filter_recent_docs(store.all_recent_documents(categories, limit=200), recency_days)
     topic_counter: Counter = Counter()
     for doc in docs:
@@ -92,7 +92,7 @@ def _trending_payload(categories: List[Category], recency_days: int = 7, limit: 
     return {
         "categories": categories,
         "recency_days": recency_days,
-        "topics": [{"topic": t, "count": c} for t, c in topic_counter.most_common(limit)],
+        "topics": [{"topic": topic, "count": count} for topic, count in topic_counter.most_common(limit)],
         "sample_sources": [doc.model_dump(mode="json") for doc in docs[: min(limit, 8)]],
     }
 
@@ -139,7 +139,7 @@ async def headlines_by_category(category: Category, limit: int = 10, recency_day
         "category": category,
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "headlines": items,
-        "trending_topics": topic_summary(docs),
+        "trending_topics": extract_top_entity_tags(docs),
     }
     await cache.set_json("headline_category", cache_key, response, max(5, min(normalized_recency * 60, 180)))
     return response
@@ -161,7 +161,7 @@ async def category_page(category: Category, recency_days: int = 7) -> dict:
         "hero_headline": items[0] if items else None,
         "secondary_headlines": items[1:5],
         "latest": items,
-        "trending_topics": topic_summary(docs),
+        "trending_topics": extract_top_entity_tags(docs),
         "top_sources": Counter(doc.source for doc in docs).most_common(5),
     }
     await cache.set_json("category_page", cache_key, response, max(5, min(normalized_recency * 60, 180)))
@@ -171,7 +171,7 @@ async def category_page(category: Category, recency_days: int = 7) -> dict:
 @router.get("/trending")
 async def trending(category: Category | None = None, recency_days: int = 7, limit: int = 10) -> dict:
     categories = [category] if category else ["tech", "research", "sports", "general"]
-    return _trending_payload(
+    return _build_trending_response(
         categories,
         recency_days=max(1, min(recency_days, 30)),
         limit=max(1, min(limit, 20)),
@@ -195,6 +195,6 @@ async def topic_page(topic: str, recency_days: int = 7) -> dict:
     return {
         "topic": topic,
         "summary": result.model_dump(mode="json"),
-        "related_topics": topic_summary(docs),
+        "related_topics": extract_top_entity_tags(docs),
         "top_sources": Counter(doc.source for doc in docs).most_common(6),
     }
