@@ -2,6 +2,7 @@
 Tests for login brute-force protection (LoginThrottle) and the /auth/login
 lockout behaviour.
 """
+
 import asyncio
 import tempfile
 import unittest
@@ -89,9 +90,7 @@ class LoginLockoutHttpTests(unittest.TestCase):
             store = DocumentStore(str(Path(tmpdir) / "throttle_http.db"))
             store.create_user("victim@example.com", "Correctpass123", "Victim")
 
-            fresh_throttle = LoginThrottle(
-                SimpleNamespace(using_redis=False), max_attempts=3, window_seconds=900
-            )
+            fresh_throttle = LoginThrottle(SimpleNamespace(using_redis=False), max_attempts=3, window_seconds=900)
             fake_cache = SimpleNamespace(
                 using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False)
             )
@@ -116,9 +115,7 @@ class LoginLockoutHttpTests(unittest.TestCase):
             store = DocumentStore(str(Path(tmpdir) / "throttle_reset.db"))
             store.create_user("user@example.com", "Correctpass123", "User")
 
-            fresh_throttle = LoginThrottle(
-                SimpleNamespace(using_redis=False), max_attempts=3, window_seconds=900
-            )
+            fresh_throttle = LoginThrottle(SimpleNamespace(using_redis=False), max_attempts=3, window_seconds=900)
             fake_cache = SimpleNamespace(
                 using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False)
             )

@@ -8,8 +8,13 @@ from backend.app.services.passkey_service import PasskeyService
 
 def _source() -> SourceDoc:
     return SourceDoc(
-        title="A cited paper", summary="Evidence", url="https://example.org/paper",
-        source="Example", category="research", source_type="research", bias_label="research",
+        title="A cited paper",
+        summary="Evidence",
+        url="https://example.org/paper",
+        source="Example",
+        category="research",
+        source_type="research",
+        bias_label="research",
         credibility_score=0.9,
     )
 

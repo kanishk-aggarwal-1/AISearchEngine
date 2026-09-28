@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import hashlib
 import re
 from typing import List
@@ -144,6 +144,8 @@ class VectorIndexService:
         parsed = urlparse(raw)
         netloc = parsed.netloc.lower().replace("www.", "")
         path = re.sub(r"/+", "/", parsed.path or "/")
-        query_pairs = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith("utm_")]
+        query_pairs = [
+            (k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith("utm_")
+        ]
         query = urlencode(sorted(query_pairs))
         return urlunparse((parsed.scheme or "https", netloc, path.rstrip("/") or "/", "", query, ""))

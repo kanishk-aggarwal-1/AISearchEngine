@@ -90,7 +90,9 @@ class PhaseTwoTests(unittest.TestCase):
     def test_search_uses_rewritten_query_for_registry_fetch(self):
         gather_mock = AsyncMock(return_value=[])
         fake_store = SimpleNamespace(
-            get_profile=lambda user_id: UserProfile(user_id=user_id, preferred_categories=[], explanation_mode="beginner"),
+            get_profile=lambda user_id: UserProfile(
+                user_id=user_id, preferred_categories=[], explanation_mode="beginner"
+            ),
             get_follows=lambda user_id: [],
             get_query_cache=lambda *args, **kwargs: None,
             all_recent_documents=lambda categories, limit=180: [],
@@ -110,28 +112,48 @@ class PhaseTwoTests(unittest.TestCase):
             ping=AsyncMock(return_value=False),
             incr=AsyncMock(return_value=1),
         )
-        with patch("backend.app.routers.search.registry", SimpleNamespace(gather=gather_mock)), \
-             patch("backend.app.routers.search.enricher", SimpleNamespace(
-                 enrich=lambda query, docs: docs,
-                 contradictions=lambda docs: [],
-                 claim_confidence=lambda docs, contradictions: 0.0,
-                 timeline=lambda docs, max_points=8: [],
-                 compare=lambda *args, **kwargs: None,
-             )), \
-             patch("backend.app.routers.search.retriever", RetrieverService(FakeEmbeddingService())), \
-             patch("backend.app.routers.search.vector_index", SimpleNamespace(search=AsyncMock(return_value=[]), ensure_collection=AsyncMock(), upsert_documents=AsyncMock(return_value=0), enabled=False)), \
-             patch("backend.app.routers.search.embedding_service", FakeEmbeddingService()), \
-             patch("backend.app.routers.search.explainer", SimpleNamespace(explain=AsyncMock(return_value={
-                 "provider": "fallback",
-                 "explanation": "No results found.",
-                 "key_takeaways": ["No results found."],
-                 "why_it_matters": "Broader retrieval often helps.",
-                 "what_changed_last_week": "Not enough context.",
-             }))), \
-             patch("backend.app.routers.search.cache", fake_cache), \
-             patch("backend.app.main.cache", fake_cache), \
-             patch("backend.app.routers.search.store", fake_store), \
-             patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
+        with (
+            patch("backend.app.routers.search.registry", SimpleNamespace(gather=gather_mock)),
+            patch(
+                "backend.app.routers.search.enricher",
+                SimpleNamespace(
+                    enrich=lambda query, docs: docs,
+                    contradictions=lambda docs: [],
+                    claim_confidence=lambda docs, contradictions: 0.0,
+                    timeline=lambda docs, max_points=8: [],
+                    compare=lambda *args, **kwargs: None,
+                ),
+            ),
+            patch("backend.app.routers.search.retriever", RetrieverService(FakeEmbeddingService())),
+            patch(
+                "backend.app.routers.search.vector_index",
+                SimpleNamespace(
+                    search=AsyncMock(return_value=[]),
+                    ensure_collection=AsyncMock(),
+                    upsert_documents=AsyncMock(return_value=0),
+                    enabled=False,
+                ),
+            ),
+            patch("backend.app.routers.search.embedding_service", FakeEmbeddingService()),
+            patch(
+                "backend.app.routers.search.explainer",
+                SimpleNamespace(
+                    explain=AsyncMock(
+                        return_value={
+                            "provider": "fallback",
+                            "explanation": "No results found.",
+                            "key_takeaways": ["No results found."],
+                            "why_it_matters": "Broader retrieval often helps.",
+                            "what_changed_last_week": "Not enough context.",
+                        }
+                    )
+                ),
+            ),
+            patch("backend.app.routers.search.cache", fake_cache),
+            patch("backend.app.main.cache", fake_cache),
+            patch("backend.app.routers.search.store", fake_store),
+            patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)),
+        ):
             client = TestClient(main_module.app)
             response = client.post(
                 "/v1/search",

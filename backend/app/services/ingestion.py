@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 from typing import List
 
 from backend.app.models import Category
@@ -21,9 +21,7 @@ class IngestionService:
         self.per_source_limit = per_source_limit
 
     async def ingest_query(self, query: str, categories: List[Category]) -> int:
-        run_id = await asyncio.to_thread(
-            self.store.create_ingestion_run, "query", query, categories
-        )
+        run_id = await asyncio.to_thread(self.store.create_ingestion_run, "query", query, categories)
         try:
             docs = await self.registry.gather(query, categories, self.per_source_limit)
             docs = await asyncio.to_thread(self.enricher.enrich, query, docs)
@@ -50,9 +48,7 @@ class IngestionService:
             raise
 
     async def ingest_seed_topics(self) -> int:
-        run_id = await asyncio.to_thread(
-            self.store.create_ingestion_run, "scheduled", "seed_topics", []
-        )
+        run_id = await asyncio.to_thread(self.store.create_ingestion_run, "scheduled", "seed_topics", [])
         seeds = [
             ("AI agents", ["tech", "research"]),
             ("cybersecurity", ["tech", "general"]),

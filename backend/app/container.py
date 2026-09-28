@@ -2,6 +2,7 @@
 Singleton service instances shared across all routers.
 Import from here rather than instantiating services in individual modules.
 """
+
 from backend.app.services.alert_service import AlertService
 from backend.app.services.cache_service import CacheService
 from backend.app.services.embedding_service import EmbeddingService
@@ -27,7 +28,9 @@ metrics = MetricsService()
 
 store = create_store()
 cache = CacheService()
-login_throttle = LoginThrottle(cache, max_attempts=settings.login_max_attempts, window_seconds=settings.login_lockout_seconds)
+login_throttle = LoginThrottle(
+    cache, max_attempts=settings.login_max_attempts, window_seconds=settings.login_lockout_seconds
+)
 metrics_store = MetricsStore(cache)
 registry = SourceRegistry(store)
 enricher = EnrichmentService()

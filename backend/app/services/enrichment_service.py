@@ -1,4 +1,4 @@
-﻿import re
+import re
 from datetime import datetime, timezone
 from typing import Dict, List
 
@@ -105,7 +105,7 @@ class EnrichmentService:
             low = sentence.lower()
             if any(token in low for token in query_tokens):
                 return sentence[:220]
-        return (sentences[0][:220] if sentences else summary[:220])
+        return sentences[0][:220] if sentences else summary[:220]
 
     def _freshness(self, published_at: datetime | None) -> str:
         if not published_at:

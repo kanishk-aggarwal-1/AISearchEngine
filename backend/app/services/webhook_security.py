@@ -1,4 +1,5 @@
 """Validation for outbound user-configured webhook destinations."""
+
 from __future__ import annotations
 
 import asyncio

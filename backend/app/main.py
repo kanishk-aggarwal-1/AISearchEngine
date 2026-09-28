@@ -9,8 +9,12 @@ from fastapi.responses import JSONResponse
 
 from backend.app.config import settings
 from backend.app.container import (
-    cache, embedding_service, logger, metrics,
-    scheduler, vector_index,
+    cache,
+    embedding_service,
+    logger,
+    metrics,
+    scheduler,
+    vector_index,
 )
 from backend.app.routers import admin, auth, browse, health, research, search, sports, users
 
@@ -108,7 +112,7 @@ def _security_headers() -> dict:
         "Cache-Control": "no-store",
         "Content-Security-Policy": (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "   # Next.js requires unsafe-inline for hydration
+            "script-src 'self' 'unsafe-inline'; "  # Next.js requires unsafe-inline for hydration
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: https:; "
             "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; "
@@ -139,7 +143,10 @@ async def metrics_middleware(request: Request, call_next):
             metrics.inc("http.errors_total")
         logger.exception(
             "request_failed request_id=%s method=%s path=%s error=%s",
-            request_id, method, path, exc,
+            request_id,
+            method,
+            path,
+            exc,
         )
         raise
     finally:
@@ -149,7 +156,11 @@ async def metrics_middleware(request: Request, call_next):
             metrics.observe(f"http.request_latency.{method}.{path}", latency_ms / 1000)
         logger.debug(
             "request_complete request_id=%s method=%s path=%s status=%s latency_ms=%s",
-            request_id, method, path, status_code, latency_ms,
+            request_id,
+            method,
+            path,
+            status_code,
+            latency_ms,
         )
 
     return response
@@ -196,4 +207,3 @@ async def security_middleware(request: Request, call_next):
     for header, value in _security_headers().items():
         response.headers[header] = value
     return response
-

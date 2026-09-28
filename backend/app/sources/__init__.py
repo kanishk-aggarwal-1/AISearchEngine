@@ -1,1 +1,1 @@
-﻿# sources package marker
+# sources package marker

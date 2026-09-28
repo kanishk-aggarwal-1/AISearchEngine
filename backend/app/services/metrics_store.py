@@ -12,6 +12,7 @@ naturally non-persistent, which is fine for dev.
 Only non-sensitive aggregate numbers are stored — no queries, no user IDs,
 no PII. Just counts, latencies, and rates.
 """
+
 from __future__ import annotations
 
 import time
@@ -193,8 +194,14 @@ class MetricsStore:
             idx += 3
 
         return self._assemble(
-            searches_total, cache_hits, cache_misses, no_result,
-            citation_sum, citation_n, latencies, series,
+            searches_total,
+            cache_hits,
+            cache_misses,
+            no_result,
+            citation_sum,
+            citation_n,
+            latencies,
+            series,
         )
 
     def _summary_inprocess(self, recent_minutes: list[int]) -> dict:
@@ -216,8 +223,15 @@ class MetricsStore:
         )
 
     def _assemble(
-        self, searches_total, cache_hits, cache_misses, no_result,
-        citation_sum, citation_n, latencies, series,
+        self,
+        searches_total,
+        cache_hits,
+        cache_misses,
+        no_result,
+        citation_sum,
+        citation_n,
+        latencies,
+        series,
     ) -> dict:
         cache_total = cache_hits + cache_misses
         sorted_lat = sorted(latencies)

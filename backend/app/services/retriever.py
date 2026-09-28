@@ -202,7 +202,9 @@ class RetrieverService:
             lexical = len(expanded_query_tokens.intersection(expanded_text_tokens))
             coverage = 0.0
             if expanded_query_tokens:
-                coverage = len(expanded_query_tokens.intersection(expanded_text_tokens)) / max(len(expanded_query_tokens), 1)
+                coverage = len(expanded_query_tokens.intersection(expanded_text_tokens)) / max(
+                    len(expanded_query_tokens), 1
+                )
             title_tokens = self._tokenize(doc.title)
             title_overlap = len(query_tokens.intersection(title_tokens))
             query_phrase = " ".join(query.lower().split())
@@ -338,6 +340,8 @@ class RetrieverService:
         parsed = urlparse(clean)
         netloc = parsed.netloc.lower().replace("www.", "")
         path = re.sub(r"/+", "/", parsed.path or "/")
-        query_pairs = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith("utm_")]
+        query_pairs = [
+            (k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith("utm_")
+        ]
         query = urlencode(sorted(query_pairs))
         return urlunparse((parsed.scheme or "https", netloc, path.rstrip("/") or "/", "", query, ""))

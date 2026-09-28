@@ -32,17 +32,13 @@ async def auth_google(payload: OAuthGoogleRequest) -> AuthSessionResponse:
     if not settings.google_oauth_client_id:
         raise HTTPException(status_code=503, detail="Google OAuth is not configured")
     async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds)) as client:
-        response = await client.get(
-            "https://oauth2.googleapis.com/tokeninfo", params={"id_token": payload.id_token}
-        )
+        response = await client.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": payload.id_token})
     if response.status_code >= 400:
         raise HTTPException(status_code=401, detail="Invalid Google identity token")
     claims = response.json()
     if claims.get("aud") != settings.google_oauth_client_id or claims.get("email_verified") not in {"true", True}:
         raise HTTPException(status_code=401, detail="Google identity token was not issued for this app")
-    return store.oauth_session(
-        "google", claims["sub"], claims["email"], claims.get("name") or claims["email"]
-    )
+    return store.oauth_session("google", claims["sub"], claims["email"], claims.get("name") or claims["email"])
 
 
 @router.post("/passkeys/registration/options")
@@ -138,7 +134,9 @@ async def auth_request_verification(request: Request) -> TokenPreviewResponse:
         ),
     )
     return TokenPreviewResponse(
-        message="Verification token issued." if email_sent else "Verification token issued. In local development, use the preview token directly.",
+        message="Verification token issued."
+        if email_sent
+        else "Verification token issued. In local development, use the preview token directly.",
         token_preview=(token if settings.email_preview_tokens else ""),
         expires_at=expires_at,
         email_sent=email_sent,
@@ -265,14 +263,16 @@ async def auth_request_email_change(request: Request, payload: EmailChangeReques
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     link = f"{settings.app_base_url.rstrip('/')}/confirm-email-change?token={token}"
     sent = await email_service.send(
-        recipient=str(payload.new_email), subject="Confirm your SignalScope AI email change",
+        recipient=str(payload.new_email),
+        subject="Confirm your SignalScope AI email change",
         text_body=f"Confirm your new email address: {link}\nThis link expires at {expires_at}.",
         html_body=f'<p>Confirm your new email address:</p><p><a href="{link}">{link}</a></p>',
     )
     return TokenPreviewResponse(
         message="Email change confirmation issued.",
         token_preview=token if settings.email_preview_tokens else "",
-        expires_at=expires_at, email_sent=sent,
+        expires_at=expires_at,
+        email_sent=sent,
         delivery_mode="preview" if settings.email_preview_tokens else ("smtp" if sent else "none"),
         recipient=str(payload.new_email),
     )

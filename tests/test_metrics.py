@@ -5,6 +5,7 @@ GET /metrics/summary endpoint.
 Uses an in-process fake cache (using_redis=False) so the fallback path is
 exercised deterministically without a Redis dependency.
 """
+
 import asyncio
 import tempfile
 import unittest
@@ -133,7 +134,9 @@ class MetricsSummaryEndpointTests(unittest.TestCase):
             store = DocumentStore(str(Path(tmpdir) / "metrics_http.db"))
             fresh_metrics = _inprocess_metrics()
             _run(fresh_metrics.record_search(latency_ms=123, cache_hit=False, citation_coverage=1.0, no_result=False))
-            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
+            fake_cache = SimpleNamespace(
+                using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False)
+            )
             with (
                 patch("backend.app.routers.health.store", store),
                 patch("backend.app.routers.health.metrics_store", fresh_metrics),
@@ -146,9 +149,17 @@ class MetricsSummaryEndpointTests(unittest.TestCase):
                 body = r.json()
                 # required keys present
                 for key in [
-                    "searches_total", "searches_last_5min", "latency_p50_ms", "latency_p95_ms",
-                    "cache_hit_rate", "citation_coverage_pct", "no_result_rate",
-                    "documents_indexed", "distinct_sources", "last_ingestion_at", "series",
+                    "searches_total",
+                    "searches_last_5min",
+                    "latency_p50_ms",
+                    "latency_p95_ms",
+                    "cache_hit_rate",
+                    "citation_coverage_pct",
+                    "no_result_rate",
+                    "documents_indexed",
+                    "distinct_sources",
+                    "last_ingestion_at",
+                    "series",
                 ]:
                     self.assertIn(key, body)
                 self.assertEqual(body["searches_total"], 1)

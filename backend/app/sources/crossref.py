@@ -31,30 +31,33 @@ class CrossrefSourceProvider(SourceProvider):
             published = None
             if parts:
                 try:
-                    published = datetime(int(parts[0]), int(parts[1]) if len(parts) > 1 else 1, int(parts[2]) if len(parts) > 2 else 1)
+                    published = datetime(
+                        int(parts[0]), int(parts[1]) if len(parts) > 1 else 1, int(parts[2]) if len(parts) > 2 else 1
+                    )
                 except (TypeError, ValueError):
                     pass
             authors = [
-                " ".join(filter(None, [author.get("given"), author.get("family")]))
-                for author in item.get("author", [])
+                " ".join(filter(None, [author.get("given"), author.get("family")])) for author in item.get("author", [])
             ]
             doi = item.get("DOI") or ""
             abstract = (item.get("abstract") or "").replace("<jats:p>", "").replace("</jats:p>", "")
-            docs.append(SourceDoc(
-                title=title,
-                summary=abstract[:1500] or f"Scholarly work registered with Crossref: {title}",
-                url=item.get("URL") or (f"https://doi.org/{doi}" if doi else "https://crossref.org"),
-                source="Crossref",
-                category="research",
-                published_at=published,
-                source_type="research",
-                bias_label="research",
-                credibility_score=0.8,
-                research_metadata=ResearchMetadata(
-                    citations=item.get("is-referenced-by-count"),
-                    venue=(item.get("container-title") or [None])[0],
-                    authors=[author for author in authors if author][:20],
-                    paper_id=doi or None,
-                ),
-            ))
+            docs.append(
+                SourceDoc(
+                    title=title,
+                    summary=abstract[:1500] or f"Scholarly work registered with Crossref: {title}",
+                    url=item.get("URL") or (f"https://doi.org/{doi}" if doi else "https://crossref.org"),
+                    source="Crossref",
+                    category="research",
+                    published_at=published,
+                    source_type="research",
+                    bias_label="research",
+                    credibility_score=0.8,
+                    research_metadata=ResearchMetadata(
+                        citations=item.get("is-referenced-by-count"),
+                        venue=(item.get("container-title") or [None])[0],
+                        authors=[author for author in authors if author][:20],
+                        paper_id=doi or None,
+                    ),
+                )
+            )
         return docs

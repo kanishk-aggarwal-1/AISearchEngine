@@ -27,6 +27,7 @@ router = APIRouter()
 
 # ── /users/{user_id}/* ──────────────────────────────────────────────────────
 
+
 @router.get("/users/{user_id}/profile", response_model=UserProfile)
 async def get_user_profile(request: Request, user_id: str) -> UserProfile:
     require_own_user(request, user_id)
@@ -106,9 +107,7 @@ async def get_alert_delivery(request: Request, user_id: str) -> AlertDeliverySet
 
 
 @router.put("/users/{user_id}/alert-delivery", response_model=AlertDeliverySettings)
-async def put_alert_delivery(
-    request: Request, user_id: str, payload: AlertDeliverySettings
-) -> AlertDeliverySettings:
+async def put_alert_delivery(request: Request, user_id: str, payload: AlertDeliverySettings) -> AlertDeliverySettings:
     require_own_user(request, user_id)
     if payload.user_id != user_id:
         raise HTTPException(status_code=400, detail="Path user_id must match payload user_id")
@@ -163,7 +162,9 @@ async def add_bookmark(request: Request, user_id: str, payload: BookmarkRequest)
 
 
 @router.get("/users/{user_id}/bookmarks", response_model=List[BookmarkItem])
-async def get_bookmarks(request: Request, user_id: str, limit: int = 200, offset: int = 0, folder: str = "", q: str = "") -> List[BookmarkItem]:
+async def get_bookmarks(
+    request: Request, user_id: str, limit: int = 200, offset: int = 0, folder: str = "", q: str = ""
+) -> List[BookmarkItem]:
     require_own_user(request, user_id)
     limit = max(1, min(limit, 500))
     offset = max(0, offset)
@@ -171,7 +172,9 @@ async def get_bookmarks(request: Request, user_id: str, limit: int = 200, offset
 
 
 @router.put("/users/{user_id}/bookmarks/{bookmark_id}", response_model=BookmarkItem)
-async def update_bookmark(request: Request, user_id: str, bookmark_id: int, payload: BookmarkMetadataRequest) -> BookmarkItem:
+async def update_bookmark(
+    request: Request, user_id: str, bookmark_id: int, payload: BookmarkMetadataRequest
+) -> BookmarkItem:
     require_own_user(request, user_id)
     item = store.update_bookmark_metadata(user_id, bookmark_id, payload.folder, payload.tags, payload.notes)
     if not item:
@@ -187,6 +190,7 @@ async def delete_bookmark(request: Request, user_id: str, bookmark_id: int) -> d
 
 
 # ── /me/* ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/me/search-history", response_model=List[SearchHistoryItem])
 async def my_search_history(request: Request, limit: int = 25, offset: int = 0) -> List[SearchHistoryItem]:
@@ -215,9 +219,7 @@ async def my_saved_sessions(request: Request, limit: int = 25, offset: int = 0) 
 
 
 @router.post("/me/saved-sessions/{context_id}", response_model=SavedSessionItem)
-async def save_my_session(
-    request: Request, context_id: str, payload: SaveSessionRequest
-) -> SavedSessionItem:
+async def save_my_session(request: Request, context_id: str, payload: SaveSessionRequest) -> SavedSessionItem:
     user = current_user(request)
     if not store.get_context(context_id, user.user_id):
         raise HTTPException(status_code=404, detail="Search context not found")

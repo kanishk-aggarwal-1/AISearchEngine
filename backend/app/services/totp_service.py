@@ -1,4 +1,5 @@
 """Small RFC 6238 implementation used for authenticator-app MFA."""
+
 from __future__ import annotations
 
 import base64
@@ -19,8 +20,8 @@ def _code(secret: str, counter: int, digits: int = 6) -> str:
     key = base64.b32decode(padded.upper())
     digest = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
     offset = digest[-1] & 0x0F
-    value = struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF
-    return str(value % (10 ** digits)).zfill(digits)
+    value = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    return str(value % (10**digits)).zfill(digits)
 
 
 def verify_code(secret: str, code: str, now: int | None = None, window: int = 1) -> bool:

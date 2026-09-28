@@ -37,8 +37,11 @@ class AlertService:
             if not docs:
                 continue
             payload = {
-                "alert_id": alert["id"], "user_id": alert["user_id"], "query": alert["query"],
-                "categories": alert["categories"], "generated_at": now.isoformat(),
+                "alert_id": alert["id"],
+                "user_id": alert["user_id"],
+                "query": alert["query"],
+                "categories": alert["categories"],
+                "generated_at": now.isoformat(),
                 "sources": [doc.model_dump(mode="json") for doc in docs[:5]],
             }
             channel_success = False
@@ -70,7 +73,9 @@ class AlertService:
         started = time.perf_counter()
         try:
             target = await validate_webhook_url(alert["webhook_url"])
-            async with httpx.AsyncClient(timeout=httpx.Timeout(settings.http_timeout_seconds), follow_redirects=False) as client:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(settings.http_timeout_seconds), follow_redirects=False
+            ) as client:
                 response = None
                 for attempt in range(max(1, settings.webhook_delivery_attempts)):
                     try:
@@ -81,10 +86,13 @@ class AlertService:
                     except httpx.HTTPError:
                         if attempt + 1 >= settings.webhook_delivery_attempts:
                             raise
-                    await asyncio.sleep(0.25 * (2 ** attempt))
+                    await asyncio.sleep(0.25 * (2**attempt))
             ok = response is not None and response.status_code < 400
             self.store.record_alert_delivery(
-                alert["id"], alert["user_id"], "webhook", "delivered" if ok else "dead_letter",
+                alert["id"],
+                alert["user_id"],
+                "webhook",
+                "delivered" if ok else "dead_letter",
                 response.status_code if response else None,
                 "" if ok else "Webhook rejected the delivery",
             )
@@ -104,18 +112,22 @@ class AlertService:
             ok = False
             for attempt in range(max(1, settings.webhook_delivery_attempts)):
                 ok = await self.email_service.send(
-                    recipient=alert["email"], subject=f"SignalScope alert: {alert['query']}",
+                    recipient=alert["email"],
+                    subject=f"SignalScope alert: {alert['query']}",
                     text_body="\n".join(lines),
-                    html_body="<h2>SignalScope alert</h2><ul>" + "".join(
-                        f'<li><a href="{doc.url}">{doc.title}</a></li>' for doc in docs[:5]
-                    ) + "</ul>",
+                    html_body="<h2>SignalScope alert</h2><ul>"
+                    + "".join(f'<li><a href="{doc.url}">{doc.title}</a></li>' for doc in docs[:5])
+                    + "</ul>",
                 )
                 if ok:
                     break
                 if attempt + 1 < settings.webhook_delivery_attempts:
-                    await asyncio.sleep(0.25 * (2 ** attempt))
+                    await asyncio.sleep(0.25 * (2**attempt))
             self.store.record_alert_delivery(
-                alert["id"], alert["user_id"], "email", "delivered" if ok else "dead_letter",
+                alert["id"],
+                alert["user_id"],
+                "email",
+                "delivered" if ok else "dead_letter",
                 error="" if ok else "Email provider unavailable",
             )
             return ok

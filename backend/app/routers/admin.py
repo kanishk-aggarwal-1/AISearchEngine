@@ -13,12 +13,11 @@ router = APIRouter()
 
 class IngestEventRequest(BaseModel):
     topic: str = Field(min_length=2)
-    categories: List[Category] = Field(
-        default_factory=lambda: ["tech", "research", "sports", "general"]
-    )
+    categories: List[Category] = Field(default_factory=lambda: ["tech", "research", "sports", "general"])
 
 
 # ── Admin ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/admin/dashboard")
 async def admin_dashboard(request: Request, limit: int = 10) -> dict:
@@ -64,6 +63,7 @@ async def admin_reingest(request: Request, payload: IngestEventRequest) -> dict:
 
 
 # ── Ingest triggers ───────────────────────────────────────────────────────────
+
 
 @router.post("/ingest/run")
 async def run_ingestion(request: Request) -> dict:

@@ -12,8 +12,17 @@ from fastapi.responses import StreamingResponse
 
 from backend.app.config import settings
 from backend.app.container import (
-    cache, embedding_service, enricher, explainer,
-    logger, metrics, metrics_store, registry, retriever, store, vector_index,
+    cache,
+    embedding_service,
+    enricher,
+    explainer,
+    logger,
+    metrics,
+    metrics_store,
+    registry,
+    retriever,
+    store,
+    vector_index,
 )
 from backend.app.models import (
     AppliedFilters,
@@ -34,16 +43,17 @@ router = APIRouter()
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
 
+
 def _apply_search_filters(docs: List[SourceDoc], payload: SearchRequest) -> List[SourceDoc]:
     filtered = docs
     if payload.recency_days is not None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=payload.recency_days)
         filtered = [
-            doc for doc in filtered
-            if doc.published_at and (
-                doc.published_at if doc.published_at.tzinfo
-                else doc.published_at.replace(tzinfo=timezone.utc)
-            ) >= cutoff
+            doc
+            for doc in filtered
+            if doc.published_at
+            and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc))
+            >= cutoff
         ]
     if payload.source_filter:
         wanted = {item.lower() for item in payload.source_filter if item.strip()}
@@ -53,17 +63,14 @@ def _apply_search_filters(docs: List[SourceDoc], payload: SearchRequest) -> List
         filtered = [doc for doc in filtered if doc.source_type in allowed]
     if payload.domain_filter:
         domains = {item.lower().removeprefix("www.") for item in payload.domain_filter if item.strip()}
-        filtered = [
-            doc for doc in filtered
-            if urlparse(doc.url).netloc.lower().removeprefix("www.") in domains
-        ]
+        filtered = [doc for doc in filtered if urlparse(doc.url).netloc.lower().removeprefix("www.") in domains]
     if payload.author_filter:
         wanted_authors = {item.lower() for item in payload.author_filter if item.strip()}
         filtered = [
-            doc for doc in filtered
-            if doc.research_metadata and wanted_authors.intersection(
-                author.lower() for author in doc.research_metadata.authors
-            )
+            doc
+            for doc in filtered
+            if doc.research_metadata
+            and wanted_authors.intersection(author.lower() for author in doc.research_metadata.authors)
         ]
     if payload.min_credibility is not None:
         filtered = [doc for doc in filtered if doc.credibility_score >= payload.min_credibility]
@@ -75,10 +82,21 @@ def _apply_search_filters(docs: List[SourceDoc], payload: SearchRequest) -> List
         filtered = [doc for doc in filtered if doc.region.lower() in regions]
     if payload.date_from:
         start = payload.date_from if payload.date_from.tzinfo else payload.date_from.replace(tzinfo=timezone.utc)
-        filtered = [doc for doc in filtered if doc.published_at and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)) >= start]
+        filtered = [
+            doc
+            for doc in filtered
+            if doc.published_at
+            and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc))
+            >= start
+        ]
     if payload.date_to:
         end = payload.date_to if payload.date_to.tzinfo else payload.date_to.replace(tzinfo=timezone.utc)
-        filtered = [doc for doc in filtered if doc.published_at and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)) <= end]
+        filtered = [
+            doc
+            for doc in filtered
+            if doc.published_at
+            and (doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)) <= end
+        ]
     return filtered
 
 
@@ -107,7 +125,8 @@ def _sort_docs(docs: List[SourceDoc], sort_by: str) -> List[SourceDoc]:
 def _suggested_queries(payload: SearchRequest) -> List[str]:
     raw = payload.query.strip()
     tokens = [
-        token for token in raw.split()
+        token
+        for token in raw.split()
         if token.lower() not in {"latest", "news", "what", "happening", "today", "this", "week"}
     ]
     compact = " ".join(tokens).strip() or raw
@@ -145,9 +164,7 @@ def _citation_coverage(sources: list) -> float:
     """
     if not sources:
         return 0.0
-    return sum(
-        1 for s in sources if bool((getattr(s, "citation_snippet", "") or "").strip())
-    ) / len(sources)
+    return sum(1 for s in sources if bool((getattr(s, "citation_snippet", "") or "").strip())) / len(sources)
 
 
 async def _search_core(payload: SearchRequest, use_cache: bool = True) -> SearchResponse:
@@ -193,9 +210,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
             )
             return response
 
-        cached = await asyncio.to_thread(
-            store.get_query_cache, cache_key, settings.query_cache_minutes
-        )
+        cached = await asyncio.to_thread(store.get_query_cache, cache_key, settings.query_cache_minutes)
         if cached:
             metrics.inc("search.cache_hit.sqlite")
             p = json.loads(cached)
@@ -292,9 +307,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         metrics.inc("vector.upsert.error")
 
     if live_docs:
-        await asyncio.to_thread(
-            store.upsert_documents, live_docs, new_embeddings, new_chunk_embeddings
-        )
+        await asyncio.to_thread(store.upsert_documents, live_docs, new_embeddings, new_chunk_embeddings)
 
     contradictions = enricher.contradictions(ranked)
     claim_confidence = enricher.claim_confidence(ranked, contradictions)
@@ -303,9 +316,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
         doc.confidence_score = round(max(0.05, min(0.99, confidence)), 4)
 
     explain_started = time.perf_counter()
-    explanation_pack = await explainer.explain(
-        payload.query, ranked, mode, contradictions, payload.explanation_format
-    )
+    explanation_pack = await explainer.explain(payload.query, ranked, mode, contradictions, payload.explanation_format)
     metrics.observe("llm.explanation_latency", time.perf_counter() - explain_started)
     timeline = enricher.timeline(ranked, max_points=8) if payload.timeline else []
 
@@ -391,6 +402,7 @@ async def _search_core(payload: SearchRequest, use_cache: bool = True) -> Search
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+
 @router.post("/search", response_model=SearchResponse)
 async def search(request: Request, payload: SearchRequest) -> SearchResponse:
     user_id = resolve_search_user(request, payload.user_id)
@@ -419,18 +431,14 @@ async def search_feedback(request: Request, payload: SearchFeedbackRequest) -> d
     user_id = resolve_search_user(request, "default")
     if not await asyncio.to_thread(store.get_context, payload.context_id, user_id):
         raise HTTPException(status_code=404, detail="Context not found")
-    await asyncio.to_thread(
-        store.add_search_feedback, user_id, payload.context_id, payload.helpful, payload.comment
-    )
+    await asyncio.to_thread(store.add_search_feedback, user_id, payload.context_id, payload.helpful, payload.comment)
     return {"ok": True}
 
 
 @router.post("/conversations")
 async def create_conversation(request: Request, payload: ConversationCreateRequest) -> dict:
     user = current_user(request)
-    conversation = await asyncio.to_thread(
-        store.create_conversation, user.user_id, payload.context_id, payload.title
-    )
+    conversation = await asyncio.to_thread(store.create_conversation, user.user_id, payload.context_id, payload.title)
     if not conversation:
         raise HTTPException(status_code=404, detail="Context not found")
     return conversation
@@ -439,9 +447,7 @@ async def create_conversation(request: Request, payload: ConversationCreateReque
 @router.get("/conversations")
 async def list_conversations(request: Request, limit: int = 50, offset: int = 0) -> list[dict]:
     user = current_user(request)
-    return await asyncio.to_thread(
-        store.list_conversations, user.user_id, max(1, min(limit, 100)), max(0, offset)
-    )
+    return await asyncio.to_thread(store.list_conversations, user.user_id, max(1, min(limit, 100)), max(0, offset))
 
 
 @router.get("/conversations/{conversation_id}")
@@ -454,23 +460,21 @@ async def get_conversation(request: Request, conversation_id: str) -> dict:
 
 
 @router.post("/conversations/{conversation_id}/messages")
-async def add_conversation_message(
-    request: Request, conversation_id: str, payload: ConversationMessageRequest
-) -> dict:
+async def add_conversation_message(request: Request, conversation_id: str, payload: ConversationMessageRequest) -> dict:
     user = current_user(request)
     context = await asyncio.to_thread(store.conversation_context, conversation_id, user.user_id)
     if not context:
         raise HTTPException(status_code=404, detail="Conversation not found")
     original_query, docs = context
-    await asyncio.to_thread(
-        store.add_conversation_message, conversation_id, user.user_id, "user", payload.question, []
-    )
-    answer, key_points = await explainer.followup(
-        original_query, docs, payload.question, payload.explanation_mode
-    )
+    await asyncio.to_thread(store.add_conversation_message, conversation_id, user.user_id, "user", payload.question, [])
+    answer, key_points = await explainer.followup(original_query, docs, payload.question, payload.explanation_mode)
     message = await asyncio.to_thread(
         store.add_conversation_message,
-        conversation_id, user.user_id, "assistant", answer, key_points,
+        conversation_id,
+        user.user_id,
+        "assistant",
+        answer,
+        key_points,
     )
     return message or {}
 
@@ -478,9 +482,7 @@ async def add_conversation_message(
 @router.post("/contexts/{context_id}/share")
 async def share_context(request: Request, context_id: str, ttl_days: int = 7) -> dict:
     user = current_user(request)
-    token = await asyncio.to_thread(
-        store.share_context, context_id, user.user_id, max(1, min(ttl_days, 30))
-    )
+    token = await asyncio.to_thread(store.share_context, context_id, user.user_id, max(1, min(ttl_days, 30)))
     if not token:
         raise HTTPException(status_code=404, detail="Context not found")
     return {"share_token": token, "expires_in_days": max(1, min(ttl_days, 30))}
@@ -498,15 +500,25 @@ async def shared_context(share_token: str) -> dict:
 async def compare(request: Request, payload: CompareRequest) -> dict:
     user_id = resolve_search_user(request, payload.user_id)
     request_a = SearchRequest(
-        query=payload.query_a, user_id=user_id, categories=payload.categories,
-        top_k=8, timeline=False, recency_days=payload.recency_days,
-        source_filter=payload.source_filter, source_type_filter=payload.source_type_filter,
+        query=payload.query_a,
+        user_id=user_id,
+        categories=payload.categories,
+        top_k=8,
+        timeline=False,
+        recency_days=payload.recency_days,
+        source_filter=payload.source_filter,
+        source_type_filter=payload.source_type_filter,
         sort_by=payload.sort_by,
     )
     request_b = SearchRequest(
-        query=payload.query_b, user_id=user_id, categories=payload.categories,
-        top_k=8, timeline=False, recency_days=payload.recency_days,
-        source_filter=payload.source_filter, source_type_filter=payload.source_type_filter,
+        query=payload.query_b,
+        user_id=user_id,
+        categories=payload.categories,
+        top_k=8,
+        timeline=False,
+        recency_days=payload.recency_days,
+        source_filter=payload.source_filter,
+        source_type_filter=payload.source_type_filter,
         sort_by=payload.sort_by,
     )
     result_a = await _search_core(request_a, use_cache=False)

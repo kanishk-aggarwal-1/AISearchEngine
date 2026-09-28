@@ -10,6 +10,7 @@ production.
 Skipped automatically unless TEST_DATABASE_URL (a postgresql:// URL) is set,
 so the normal SQLite test run is unaffected.
 """
+
 import os
 import unittest
 from datetime import datetime, timezone
@@ -151,7 +152,9 @@ class PostgresStoreContractTests(unittest.TestCase):
         alerts = self.store.get_alerts(user.user_id)
         self.assertTrue(alerts)
         self.store.upsert_alert_delivery(
-            AlertDeliverySettings(user_id=user.user_id, webhook_url="https://ex.com/wh", digest_mode="instant", enabled=True)
+            AlertDeliverySettings(
+                user_id=user.user_id, webhook_url="https://ex.com/wh", digest_mode="instant", enabled=True
+            )
         )
         delivery = self.store.get_alert_delivery(user.user_id)
         self.assertIsNotNone(delivery)
