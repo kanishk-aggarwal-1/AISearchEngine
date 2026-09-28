@@ -45,11 +45,14 @@ class SourceRegistry:
         }
 
     async def gather(self, query: str, categories: List[Category], per_source_limit: int) -> List[SourceDoc]:
+        disabled_sources: set[str] = set()
+        if self.store:
+            disabled_sources = {s.source_name for s in self.store.get_source_statuses() if not s.enabled}
         tasks = []
         for category in categories:
             for provider in self.providers.get(category, []):
                 source_name = getattr(provider, "source_name", provider.__class__.__name__)
-                if self.store and not self.store.source_enabled(source_name):
+                if source_name in disabled_sources:
                     continue
                 tasks.append(self._provider_search(provider, category, query, per_source_limit))
 
