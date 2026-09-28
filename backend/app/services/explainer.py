@@ -156,7 +156,7 @@ class ExplainerService:
         context = self._context_block(docs[:10])
         system, user = self._build_explain_prompt(query, mode, output_format, contradictions, context)
         response = self.gemini_client.models.generate_content(model="gemini-2.5-flash", contents=f"{system}\n\n{user}")
-        return self._normalize_payload(self._parse_json_response(response.text))
+        return self._coerce_llm_response(self._parse_json_response(response.text))
 
     async def _openai_explain(
         self,
@@ -173,9 +173,9 @@ class ExplainerService:
             input=[{"role": "system", "content": system}, {"role": "user", "content": user}],
             temperature=0.2,
         )
-        return self._normalize_payload(self._parse_json_response(resp.output_text or ""))
+        return self._coerce_llm_response(self._parse_json_response(resp.output_text or ""))
 
-    def _normalize_payload(self, payload: Dict[str, object]) -> Dict[str, object]:
+    def _coerce_llm_response(self, payload: Dict[str, object]) -> Dict[str, object]:
         return {
             "explanation": str(payload.get("explanation", "")).strip() or "No explanation generated.",
             "key_takeaways": [str(item).strip() for item in payload.get("key_takeaways", []) if str(item).strip()][:6],

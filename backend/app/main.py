@@ -1,3 +1,4 @@
+import os
 import random
 import time
 import uuid
@@ -53,7 +54,7 @@ async def lifespan(app: FastAPI):
             "Set GEMINI_API_KEY or OPENAI_API_KEY in your .env, "
             "or set STRICT_REAL_EMBEDDINGS=false to allow hash-based fallback."
         )
-    worker_count = int(__import__("os").environ.get("WEB_CONCURRENCY", "1"))
+    worker_count = int(os.environ.get("WEB_CONCURRENCY", "1"))
     if worker_count > 1 and not cache.using_redis:
         logger.warning(
             "multi_worker_no_redis workers=%d — rate limiting is per-worker only. "
