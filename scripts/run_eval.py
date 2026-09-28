@@ -167,7 +167,7 @@ class SettingsOverride:
             setattr(settings, key, value)
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, _exc_type, exc, _tb):
         for key, value in self.originals.items():
             setattr(settings, key, value)
 
