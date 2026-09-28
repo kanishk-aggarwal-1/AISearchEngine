@@ -893,18 +893,7 @@ class DocumentStore:
                 (token, row["user_id"], now_iso, now_iso, expires_iso),
             )
         self.logger.info("audit login_success user_id=%s", row["user_id"])
-        return AuthSessionResponse(
-            token=token,
-            user=AuthUser(
-                user_id=row["user_id"],
-                email=row["email"],
-                display_name=row["display_name"],
-                created_at=row["created_at"],
-                is_admin=bool(row["is_admin"]),
-                email_verified=bool(row["email_verified"]),
-                mfa_enabled=bool(row["mfa_enabled"]),
-            ),
-        )
+        return AuthSessionResponse(token=token, user=self._row_to_user(row))
 
     def issue_session(self, user_id: str) -> AuthSessionResponse | None:
         now = datetime.now(timezone.utc)
@@ -917,18 +906,7 @@ class DocumentStore:
                 "INSERT INTO auth_sessions (token, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)",
                 (token, user_id, now.isoformat(), now.isoformat(), (now + timedelta(days=30)).isoformat()),
             )
-        return AuthSessionResponse(
-            token=token,
-            user=AuthUser(
-                user_id=row["user_id"],
-                email=row["email"],
-                display_name=row["display_name"],
-                created_at=row["created_at"],
-                is_admin=bool(row["is_admin"]),
-                email_verified=bool(row["email_verified"]),
-                mfa_enabled=bool(row["mfa_enabled"]),
-            ),
-        )
+        return AuthSessionResponse(token=token, user=self._row_to_user(row))
 
     def oauth_session(self, provider: str, subject: str, email: str, display_name: str) -> AuthSessionResponse:
         now = datetime.now(timezone.utc).isoformat()
@@ -1037,15 +1015,7 @@ class DocumentStore:
             if not row:
                 return None
             conn.execute("UPDATE auth_sessions SET last_seen_at = ? WHERE token = ?", (now_iso, token.strip()))
-        return AuthUser(
-            user_id=row["user_id"],
-            email=row["email"],
-            display_name=row["display_name"],
-            created_at=row["created_at"],
-            is_admin=bool(row["is_admin"]),
-            email_verified=bool(row["email_verified"]),
-            mfa_enabled=bool(row["mfa_enabled"]),
-        )
+        return self._row_to_user(row)
 
     def logout_session(self, token: str) -> AuthMessage:
         with self._connection() as conn:
@@ -1073,15 +1043,7 @@ class DocumentStore:
             row = conn.execute("SELECT * FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
         if not row:
             return None
-        return AuthUser(
-            user_id=row["user_id"],
-            email=row["email"],
-            display_name=row["display_name"],
-            created_at=row["created_at"],
-            is_admin=bool(row["is_admin"]),
-            email_verified=bool(row["email_verified"]),
-            mfa_enabled=bool(row["mfa_enabled"]),
-        )
+        return self._row_to_user(row)
 
     def export_user_data(self, user_id: str) -> dict:
         with self._connection() as conn:
@@ -1274,15 +1236,7 @@ class DocumentStore:
             conn.execute("UPDATE auth_verification_tokens SET used_at = ? WHERE token = ?", (now_iso, token.strip()))
             conn.execute("UPDATE auth_users SET email_verified = 1 WHERE user_id = ?", (row["user_id"],))
         self.logger.info("audit email_verified user_id=%s", row["user_id"])
-        return AuthUser(
-            user_id=row["user_id"],
-            email=row["email"],
-            display_name=row["display_name"],
-            created_at=row["created_at"],
-            is_admin=bool(row["is_admin"]),
-            email_verified=True,
-            mfa_enabled=bool(row["mfa_enabled"]),
-        )
+        return self._row_to_user(row, email_verified=True)
 
     def issue_password_reset_token(self, email: str) -> tuple[str, str] | None:
         normalized_email = self._normalize_email(email)
@@ -2235,6 +2189,18 @@ class DocumentStore:
             entity_tags=entity_tags,
             research_metadata=research,
             sports_metadata=sports,
+        )
+
+    @staticmethod
+    def _row_to_user(row: sqlite3.Row, email_verified: bool | None = None) -> AuthUser:
+        return AuthUser(
+            user_id=row["user_id"],
+            email=row["email"],
+            display_name=row["display_name"],
+            created_at=row["created_at"],
+            is_admin=bool(row["is_admin"]),
+            email_verified=email_verified if email_verified is not None else bool(row["email_verified"]),
+            mfa_enabled=bool(row["mfa_enabled"]) if "mfa_enabled" in row.keys() else False,
         )
 
     def _hash_password(self, password: str) -> str:
