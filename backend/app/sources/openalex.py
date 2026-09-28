@@ -43,22 +43,25 @@ class OpenAlexSourceProvider(SourceProvider):
             ]
             source = (work.get("primary_location") or {}).get("source") or {}
             doi = work.get("doi") or ""
-            docs.append(SourceDoc(
-                title=title,
-                summary=_abstract(work.get("abstract_inverted_index")) or f"Research work indexed by OpenAlex: {title}",
-                url=doi or work.get("id", "https://openalex.org"),
-                source="OpenAlex",
-                category="research",
-                published_at=published,
-                source_type="research",
-                bias_label="research",
-                credibility_score=0.82,
-                research_metadata=ResearchMetadata(
-                    citations=work.get("cited_by_count"),
-                    venue=source.get("display_name"),
-                    theme=(work.get("primary_topic") or {}).get("display_name"),
-                    authors=authors[:20],
-                    paper_id=(work.get("id") or "").rsplit("/", 1)[-1] or None,
-                ),
-            ))
+            docs.append(
+                SourceDoc(
+                    title=title,
+                    summary=_abstract(work.get("abstract_inverted_index"))
+                    or f"Research work indexed by OpenAlex: {title}",
+                    url=doi or work.get("id", "https://openalex.org"),
+                    source="OpenAlex",
+                    category="research",
+                    published_at=published,
+                    source_type="research",
+                    bias_label="research",
+                    credibility_score=0.82,
+                    research_metadata=ResearchMetadata(
+                        citations=work.get("cited_by_count"),
+                        venue=source.get("display_name"),
+                        theme=(work.get("primary_topic") or {}).get("display_name"),
+                        authors=authors[:20],
+                        paper_id=(work.get("id") or "").rsplit("/", 1)[-1] or None,
+                    ),
+                )
+            )
         return docs

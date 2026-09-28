@@ -133,17 +133,19 @@ class PhaseThreeTests(unittest.TestCase):
                 ping=AsyncMock(return_value=False),
             )
             # Patch store in the auth router and the shared dependencies module
-            with patch("backend.app.routers.auth.store", store), \
-                 patch("backend.app.routers.auth.email_service", mock_email), \
-                 patch("backend.app.dependencies.store", store), \
-                 patch("backend.app.main.cache", fake_cache), \
-                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
+            with (
+                patch("backend.app.routers.auth.store", store),
+                patch("backend.app.routers.auth.email_service", mock_email),
+                patch("backend.app.dependencies.store", store),
+                patch("backend.app.main.cache", fake_cache),
+                patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)),
+            ):
                 client = TestClient(main_module.app)
                 register = client.post(
                     "/v1/auth/register",
                     json={
                         "email": "mail@example.com",
-                        "password": "Supersecret123",   # uppercase required
+                        "password": "Supersecret123",  # uppercase required
                         "display_name": "Mail User",
                     },
                 )

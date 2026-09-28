@@ -39,7 +39,9 @@ def test_authenticated_search_cannot_impersonate_another_user():
 
 
 def test_private_webhook_destination_rejected():
-    with patch("backend.app.services.webhook_security.socket.getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 443))]):
+    with patch(
+        "backend.app.services.webhook_security.socket.getaddrinfo", return_value=[(2, 1, 6, "", ("127.0.0.1", 443))]
+    ):
         try:
             asyncio.run(validate_webhook_url("https://localhost/hook"))
             assert False, "expected unsafe webhook rejection"
@@ -65,21 +67,22 @@ def test_password_reset_token_hidden_when_preview_disabled_and_email_fails():
         store = DocumentStore(str(Path(tmpdir) / "security.db"))
         store.create_user("member@example.com", "StrongPassword123", "Member")
         fake_cache = SimpleNamespace(using_redis=False, ping=AsyncMock(return_value=False))
-        with patch("backend.app.routers.auth.store", store), \
-             patch("backend.app.routers.auth.email_service.send", AsyncMock(return_value=False)), \
-             patch("backend.app.routers.auth.settings.email_preview_tokens", False), \
-             patch("backend.app.main.cache", fake_cache):
+        with (
+            patch("backend.app.routers.auth.store", store),
+            patch("backend.app.routers.auth.email_service.send", AsyncMock(return_value=False)),
+            patch("backend.app.routers.auth.settings.email_preview_tokens", False),
+            patch("backend.app.main.cache", fake_cache),
+        ):
             client = TestClient(main_module.app)
-            response = client.post(
-                "/v1/auth/request-password-reset", json={"email": "member@example.com"}
-            )
+            response = client.post("/v1/auth/request-password-reset", json={"email": "member@example.com"})
         assert response.status_code == 200
         assert response.json()["token_preview"] == ""
 
 
 def test_admin_assignment_uses_explicit_bootstrap_email():
-    with tempfile.TemporaryDirectory() as tmpdir, patch(
-        "backend.app.services.document_store.settings.bootstrap_admin_email", "owner@example.com"
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("backend.app.services.document_store.settings.bootstrap_admin_email", "owner@example.com"),
     ):
         store = DocumentStore(str(Path(tmpdir) / "admin.db"))
         member = store.create_user("member@example.com", "StrongPassword123", "Member")

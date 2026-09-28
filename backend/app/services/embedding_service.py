@@ -15,7 +15,9 @@ except Exception:  # pragma: no cover
 class EmbeddingService:
     def __init__(self) -> None:
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-        self.gemini_client = genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key and genai else None
+        self.gemini_client = (
+            genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key and genai else None
+        )
         self.dim = 64
 
     @property

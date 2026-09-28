@@ -124,9 +124,7 @@ class CacheService:
         if not self.using_redis:
             return True
         try:
-            return bool(await self.client.set(
-                self._key("locks", name), owner, ex=max(5, ttl_seconds), nx=True
-            ))
+            return bool(await self.client.set(self._key("locks", name), owner, ex=max(5, ttl_seconds), nx=True))
         except Exception as exc:
             self.logger.warning("redis_lock_acquire_failed name=%s error=%s", name, exc)
             self.enabled = False

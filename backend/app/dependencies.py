@@ -1,4 +1,5 @@
 """Shared FastAPI dependencies: auth extraction and enforcement."""
+
 from fastapi import HTTPException, Request
 
 from backend.app.container import logger, store

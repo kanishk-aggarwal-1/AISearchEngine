@@ -72,7 +72,9 @@ class SourceRegistry:
 
         return list(unique.values())
 
-    async def _provider_search(self, provider: SourceProvider, category: Category, query: str, limit: int) -> List[SourceDoc]:
+    async def _provider_search(
+        self, provider: SourceProvider, category: Category, query: str, limit: int
+    ) -> List[SourceDoc]:
         source_name = getattr(provider, "source_name", provider.__class__.__name__)
         last_error = ""
         for attempt in range(1, self.MAX_ATTEMPTS + 1):

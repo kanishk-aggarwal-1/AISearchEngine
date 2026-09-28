@@ -69,6 +69,7 @@ class PhaseFiveTests(unittest.TestCase):
 
     def test_admin_dashboard_returns_snapshot(self):
         from types import SimpleNamespace
+
         with tempfile.TemporaryDirectory() as tmpdir:
             store = DocumentStore(str(Path(tmpdir) / "phase5_admin.db"))
             store.record_source_result("Custom Source", "tech", 3, error="")
@@ -78,18 +79,20 @@ class PhaseFiveTests(unittest.TestCase):
                 ping=__import__("unittest.mock", fromlist=["AsyncMock"]).AsyncMock(return_value=False),
             )
             # Patch store in every module that uses it for these requests
-            with patch("backend.app.routers.auth.store", store), \
-                 patch("backend.app.routers.admin.store", store), \
-                 patch("backend.app.dependencies.store", store), \
-                 patch("backend.app.config.settings.bootstrap_admin_email", "admin@example.com"), \
-                 patch("backend.app.main.cache", fake_cache), \
-                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
+            with (
+                patch("backend.app.routers.auth.store", store),
+                patch("backend.app.routers.admin.store", store),
+                patch("backend.app.dependencies.store", store),
+                patch("backend.app.config.settings.bootstrap_admin_email", "admin@example.com"),
+                patch("backend.app.main.cache", fake_cache),
+                patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)),
+            ):
                 client = TestClient(main_module.app)
                 register = client.post(
                     "/v1/auth/register",
                     json={
                         "email": "admin@example.com",
-                        "password": "Supersecret123",   # uppercase required by complexity validator
+                        "password": "Supersecret123",  # uppercase required by complexity validator
                         "display_name": "Admin User",
                     },
                 )

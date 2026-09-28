@@ -1,4 +1,4 @@
-﻿import json
+import json
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
@@ -18,7 +18,9 @@ except Exception:  # pragma: no cover
 class ExplainerService:
     def __init__(self) -> None:
         self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
-        self.gemini_client = genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key and genai else None
+        self.gemini_client = (
+            genai.Client(api_key=settings.gemini_api_key) if settings.gemini_api_key and genai else None
+        )
         self.logger = get_logger("signalscope.explainer")
 
     async def explain(
@@ -120,7 +122,14 @@ class ExplainerService:
         answer = f"Based on the current context, the strongest signals are around: {title_list}."
         return answer, ["This answer is derived from the saved search context."]
 
-    async def _gemini_explain(self, query: str, docs: List[SourceDoc], mode: ExplanationMode, contradictions: List[str], output_format: ExplanationFormat) -> Dict[str, object]:
+    async def _gemini_explain(
+        self,
+        query: str,
+        docs: List[SourceDoc],
+        mode: ExplanationMode,
+        contradictions: List[str],
+        output_format: ExplanationFormat,
+    ) -> Dict[str, object]:
         context = self._context_block(docs[:10])
         prompt = (
             "You are an AI research and news assistant. Explain retrieved information clearly and truthfully. "
@@ -137,7 +146,14 @@ class ExplainerService:
         response = self.gemini_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
         return self._normalize_payload(self._parse_json_response(response.text))
 
-    async def _openai_explain(self, query: str, docs: List[SourceDoc], mode: ExplanationMode, contradictions: List[str], output_format: ExplanationFormat) -> Dict[str, object]:
+    async def _openai_explain(
+        self,
+        query: str,
+        docs: List[SourceDoc],
+        mode: ExplanationMode,
+        contradictions: List[str],
+        output_format: ExplanationFormat,
+    ) -> Dict[str, object]:
         context = self._context_block(docs[:10])
         system = (
             "You are an AI research and news assistant. Explain retrieved information clearly and truthfully. "
@@ -163,11 +179,20 @@ class ExplainerService:
         return {
             "explanation": str(payload.get("explanation", "")).strip() or "No explanation generated.",
             "key_takeaways": [str(item).strip() for item in payload.get("key_takeaways", []) if str(item).strip()][:6],
-            "why_it_matters": str(payload.get("why_it_matters", "")).strip() or "This topic influences near-term decisions.",
-            "what_changed_last_week": str(payload.get("what_changed_last_week", "")).strip() or "The latest batch shows incremental change rather than a full trend reversal.",
+            "why_it_matters": str(payload.get("why_it_matters", "")).strip()
+            or "This topic influences near-term decisions.",
+            "what_changed_last_week": str(payload.get("what_changed_last_week", "")).strip()
+            or "The latest batch shows incremental change rather than a full trend reversal.",
         }
 
-    def _fallback_explanation(self, query: str, docs: List[SourceDoc], mode: ExplanationMode, contradictions: List[str], output_format: ExplanationFormat) -> Dict[str, object]:
+    def _fallback_explanation(
+        self,
+        query: str,
+        docs: List[SourceDoc],
+        mode: ExplanationMode,
+        contradictions: List[str],
+        output_format: ExplanationFormat,
+    ) -> Dict[str, object]:
         top = docs[:4]
         source_names = ", ".join(sorted({doc.source for doc in top}))
         if mode == "tldr":
@@ -179,7 +204,9 @@ class ExplainerService:
         else:
             base = f"For '{query}', the strongest results come from {source_names} [1]. Multiple sources report similar themes, so we can treat this as a credible snapshot [1][2]."
 
-        takeaways = [f"[{idx}] {doc.title} ({doc.source}, {doc.freshness_label})" for idx, doc in enumerate(top, start=1)]
+        takeaways = [
+            f"[{idx}] {doc.title} ({doc.source}, {doc.freshness_label})" for idx, doc in enumerate(top, start=1)
+        ]
         if contradictions:
             takeaways.append(f"Caution: {contradictions[0]}")
 
@@ -235,7 +262,7 @@ class ExplainerService:
             if doc.research_metadata and doc.research_metadata.authors:
                 authors = f" | Authors: {', '.join(doc.research_metadata.authors[:4])}"
             lines.append(
-                f"<source index=\"{idx}\">\nTitle: {doc.title[:300]}\n"
+                f'<source index="{idx}">\nTitle: {doc.title[:300]}\n'
                 f"Source: {doc.source} | Category: {doc.category} | Freshness: {doc.freshness_label}{authors}\n"
                 f"Support: {doc.citation_snippet[:280]}\n"
                 f"Summary: {doc.summary[:500]}\n</source>"

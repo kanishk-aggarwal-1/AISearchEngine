@@ -39,10 +39,15 @@ class PhaseFourTests(unittest.TestCase):
                 ]
             )
             from types import SimpleNamespace
-            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
-            with patch("backend.app.routers.browse.store", store), \
-                 patch("backend.app.main.cache", fake_cache), \
-                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
+
+            fake_cache = SimpleNamespace(
+                using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False)
+            )
+            with (
+                patch("backend.app.routers.browse.store", store),
+                patch("backend.app.main.cache", fake_cache),
+                patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)),
+            ):
                 client = TestClient(main_module.app)
                 response = client.get("/v1/trending?category=tech&recency_days=7")
                 self.assertEqual(response.status_code, 200)
@@ -61,14 +66,20 @@ class PhaseFourTests(unittest.TestCase):
                         source="Example Sports",
                         category="sports",
                         published_at=datetime.now(timezone.utc),
-                        sports_metadata=SportsMetadata(team="Lakers", opponent="Celtics", league="NBA", scoreline="110-104"),
+                        sports_metadata=SportsMetadata(
+                            team="Lakers", opponent="Celtics", league="NBA", scoreline="110-104"
+                        ),
                     )
                 ]
             )
-            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
-            with patch("backend.app.routers.sports.store", store), \
-                 patch("backend.app.main.cache", fake_cache), \
-                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
+            fake_cache = SimpleNamespace(
+                using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False)
+            )
+            with (
+                patch("backend.app.routers.sports.store", store),
+                patch("backend.app.main.cache", fake_cache),
+                patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)),
+            ):
                 client = TestClient(main_module.app)
                 response = client.get("/v1/sports/team/Lakers?recency_days=14")
                 self.assertEqual(response.status_code, 200)
@@ -100,15 +111,30 @@ class PhaseFourTests(unittest.TestCase):
                     ),
                 ]
             )
-            stub_explainer = type("E", (), {"explain": AsyncMock(return_value={
-                "provider": "fallback", "explanation": "Summary",
-                "key_takeaways": ["One"], "why_it_matters": "Why", "what_changed_last_week": "Week",
-            })})()
-            fake_cache = SimpleNamespace(using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False))
-            with patch("backend.app.routers.research.store", store), \
-                 patch("backend.app.routers.research.explainer", stub_explainer), \
-                 patch("backend.app.main.cache", fake_cache), \
-                 patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)):
+            stub_explainer = type(
+                "E",
+                (),
+                {
+                    "explain": AsyncMock(
+                        return_value={
+                            "provider": "fallback",
+                            "explanation": "Summary",
+                            "key_takeaways": ["One"],
+                            "why_it_matters": "Why",
+                            "what_changed_last_week": "Week",
+                        }
+                    )
+                },
+            )()
+            fake_cache = SimpleNamespace(
+                using_redis=False, incr=AsyncMock(return_value=1), ping=AsyncMock(return_value=False)
+            )
+            with (
+                patch("backend.app.routers.research.store", store),
+                patch("backend.app.routers.research.explainer", stub_explainer),
+                patch("backend.app.main.cache", fake_cache),
+                patch("backend.app.main.embedding_service", SimpleNamespace(real_embeddings_enabled=True)),
+            ):
                 client = TestClient(main_module.app)
                 response = client.get("/v1/research/paper/1234.5678")
                 self.assertEqual(response.status_code, 200)

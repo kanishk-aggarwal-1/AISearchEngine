@@ -2,6 +2,7 @@
 
 Example: python scripts/load_search.py --requests 100 --concurrency 10
 """
+
 import argparse
 import asyncio
 import statistics
@@ -22,15 +23,21 @@ async def main() -> int:
     failures = 0
 
     async with httpx.AsyncClient(timeout=60) as client:
+
         async def send() -> None:
             nonlocal failures
             async with semaphore:
                 started = time.perf_counter()
                 try:
-                    response = await client.post(args.url, json={
-                        "query": args.query, "user_id": "anonymous",
-                        "categories": ["tech", "research"], "top_k": 6,
-                    })
+                    response = await client.post(
+                        args.url,
+                        json={
+                            "query": args.query,
+                            "user_id": "anonymous",
+                            "categories": ["tech", "research"],
+                            "top_k": 6,
+                        },
+                    )
                     if response.status_code >= 400:
                         failures += 1
                 except httpx.HTTPError:

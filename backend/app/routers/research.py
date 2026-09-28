@@ -29,8 +29,11 @@ async def external_research_papers(query: str = "AI", limit: int = 20) -> dict:
     docs = await registry.gather(query, ["research"], max(1, min(limit, 25)))
     papers = sorted(
         docs,
-        key=lambda item: item.research_metadata.citations
-        if item.research_metadata and item.research_metadata.citations is not None else -1,
+        key=lambda item: (
+            item.research_metadata.citations
+            if item.research_metadata and item.research_metadata.citations is not None
+            else -1
+        ),
         reverse=True,
     )
     return {
@@ -57,14 +60,21 @@ async def research_citation_graph(paper_id: str) -> dict:
         "paper": {"id": openalex_id, "title": work.get("display_name"), "doi": work.get("doi")},
         "cited_by_count": work.get("cited_by_count", 0),
         "references": work.get("referenced_works", [])[:50],
-        "citing_works": [{
-            "id": item.get("id"), "title": item.get("display_name"),
-            "year": item.get("publication_year"), "doi": item.get("doi"),
-        } for item in citing],
+        "citing_works": [
+            {
+                "id": item.get("id"),
+                "title": item.get("display_name"),
+                "year": item.get("publication_year"),
+                "doi": item.get("doi"),
+            }
+            for item in citing
+        ],
         "full_text": {
             "open_access": (work.get("open_access") or {}).get("is_oa", False),
-            "url": ((work.get("best_oa_location") or {}).get("pdf_url")
-                    or (work.get("best_oa_location") or {}).get("landing_page_url")),
+            "url": (
+                (work.get("best_oa_location") or {}).get("pdf_url")
+                or (work.get("best_oa_location") or {}).get("landing_page_url")
+            ),
             "license": (work.get("best_oa_location") or {}).get("license"),
         },
     }
@@ -76,18 +86,12 @@ async def research_insights(query: str = "AI") -> dict:
     if not docs:
         docs = store.all_recent_documents(["research"], limit=25)
     themes = Counter(
-        doc.research_metadata.theme
-        for doc in docs
-        if doc.research_metadata and doc.research_metadata.theme
+        doc.research_metadata.theme for doc in docs if doc.research_metadata and doc.research_metadata.theme
     )
     venues = Counter(
-        doc.research_metadata.venue
-        for doc in docs
-        if doc.research_metadata and doc.research_metadata.venue
+        doc.research_metadata.venue for doc in docs if doc.research_metadata and doc.research_metadata.venue
     )
-    code_count = sum(
-        1 for doc in docs if doc.research_metadata and bool(doc.research_metadata.code_available)
-    )
+    code_count = sum(1 for doc in docs if doc.research_metadata and bool(doc.research_metadata.code_available))
     return {
         "query": query,
         "theme_clusters": dict(themes.most_common(8)),
@@ -118,8 +122,10 @@ async def research_paper_page(paper_id: str) -> dict:
     docs = store.all_recent_documents(["research"], limit=120)
     match = next(
         (
-            doc for doc in docs
-            if doc.research_metadata and (
+            doc
+            for doc in docs
+            if doc.research_metadata
+            and (
                 (doc.research_metadata.paper_id or "").lower() == paper_id.lower()
                 or paper_id.lower() in doc.url.lower()
             )
@@ -134,9 +140,7 @@ async def research_paper_page(paper_id: str) -> dict:
         if doc.url == match.url or not doc.research_metadata or not match.research_metadata:
             continue
         same_theme = doc.research_metadata.theme == match.research_metadata.theme
-        shared_authors = set(doc.research_metadata.authors).intersection(
-            match.research_metadata.authors
-        )
+        shared_authors = set(doc.research_metadata.authors).intersection(match.research_metadata.authors)
         if same_theme or shared_authors:
             related.append(doc)
 
@@ -151,7 +155,14 @@ async def research_paper_page(paper_id: str) -> dict:
 @router.get("/paper/{paper_id}/bibtex", response_class=PlainTextResponse)
 async def research_paper_bibtex(paper_id: str) -> str:
     docs = store.all_recent_documents(["research"], limit=500)
-    match = next((doc for doc in docs if doc.research_metadata and (doc.research_metadata.paper_id or "").lower() == paper_id.lower()), None)
+    match = next(
+        (
+            doc
+            for doc in docs
+            if doc.research_metadata and (doc.research_metadata.paper_id or "").lower() == paper_id.lower()
+        ),
+        None,
+    )
     if not match:
         raise HTTPException(status_code=404, detail="Paper not found")
     metadata = match.research_metadata

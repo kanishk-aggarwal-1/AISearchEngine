@@ -19,10 +19,13 @@ class PhaseSixTests(unittest.TestCase):
 
     def test_rate_limit_blocks_after_threshold(self):
         from unittest.mock import PropertyMock
+
         main_module._RATE_LIMIT_BUCKETS.clear()
         # using_redis is a @property — patch via the type to return False (in-process path)
-        with patch.object(type(main_module.cache), "using_redis", new_callable=PropertyMock, return_value=False), \
-             patch.object(main_module.settings, "rate_limit_per_minute", 1):
+        with (
+            patch.object(type(main_module.cache), "using_redis", new_callable=PropertyMock, return_value=False),
+            patch.object(main_module.settings, "rate_limit_per_minute", 1),
+        ):
             client = TestClient(main_module.app)
             first = client.get("/health")
             second = client.get("/health")
@@ -32,14 +35,18 @@ class PhaseSixTests(unittest.TestCase):
 
     def test_deep_health_reports_components(self):
         main_module._RATE_LIMIT_BUCKETS.clear()
-        with patch.object(health_module.store, "ping", return_value=True), \
-             patch.object(health_module.store, "last_successful_ingestion_at", return_value="2026-05-12T10:00:00+00:00"), \
-             patch.object(health_module.store, "source_freshness_summary", return_value={}), \
-             patch.object(type(health_module.cache), "using_redis", new_callable=PropertyMock, return_value=True), \
-             patch.object(health_module.cache, "ping", new=AsyncMock(return_value=True)), \
-             patch.object(health_module.vector_index, "health", new=AsyncMock(
-                 return_value={"backend": "qdrant", "enabled": False, "status": "unconfigured"}
-             )):
+        with (
+            patch.object(health_module.store, "ping", return_value=True),
+            patch.object(health_module.store, "last_successful_ingestion_at", return_value="2026-05-12T10:00:00+00:00"),
+            patch.object(health_module.store, "source_freshness_summary", return_value={}),
+            patch.object(type(health_module.cache), "using_redis", new_callable=PropertyMock, return_value=True),
+            patch.object(health_module.cache, "ping", new=AsyncMock(return_value=True)),
+            patch.object(
+                health_module.vector_index,
+                "health",
+                new=AsyncMock(return_value={"backend": "qdrant", "enabled": False, "status": "unconfigured"}),
+            ),
+        ):
             client = TestClient(main_module.app)
             response = client.get("/health/deep")
             self.assertEqual(response.status_code, 200)
@@ -54,14 +61,18 @@ class PhaseSixTests(unittest.TestCase):
 
     def test_deep_health_reports_degraded_dependencies(self):
         main_module._RATE_LIMIT_BUCKETS.clear()
-        with patch.object(health_module.store, "ping", return_value=False), \
-             patch.object(health_module.store, "last_successful_ingestion_at", return_value=None), \
-             patch.object(health_module.store, "source_freshness_summary", return_value={}), \
-             patch.object(type(health_module.cache), "using_redis", new_callable=PropertyMock, return_value=True), \
-             patch.object(health_module.cache, "ping", new=AsyncMock(return_value=False)), \
-             patch.object(health_module.vector_index, "health", new=AsyncMock(
-                 return_value={"backend": "qdrant", "enabled": True, "status": "degraded"}
-             )):
+        with (
+            patch.object(health_module.store, "ping", return_value=False),
+            patch.object(health_module.store, "last_successful_ingestion_at", return_value=None),
+            patch.object(health_module.store, "source_freshness_summary", return_value={}),
+            patch.object(type(health_module.cache), "using_redis", new_callable=PropertyMock, return_value=True),
+            patch.object(health_module.cache, "ping", new=AsyncMock(return_value=False)),
+            patch.object(
+                health_module.vector_index,
+                "health",
+                new=AsyncMock(return_value={"backend": "qdrant", "enabled": True, "status": "degraded"}),
+            ),
+        ):
             client = TestClient(main_module.app)
             response = client.get("/health/deep")
             self.assertEqual(response.status_code, 200)

@@ -15,6 +15,7 @@ router = APIRouter()
 
 # ── Shared helpers used by browse, sports, and research ──────────────────────
 
+
 def topic_summary(docs: List[SourceDoc]) -> List[str]:
     counter: Counter = Counter()
     for doc in docs[:20]:
@@ -30,10 +31,7 @@ def filter_recent_docs(docs: List[SourceDoc], recency_days: int) -> List[SourceD
     for doc in docs:
         if not doc.published_at:
             continue
-        published = (
-            doc.published_at if doc.published_at.tzinfo
-            else doc.published_at.replace(tzinfo=timezone.utc)
-        )
+        published = doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)
         if published >= cutoff:
             filtered.append(doc)
     return filtered
@@ -43,9 +41,7 @@ def _headline_cache_key(category: str, limit: int, recency_days: int) -> str:
     return f"{category}:{limit}:{recency_days}"
 
 
-async def latest_headlines_for_category(
-    category: Category, limit: int, recency_days: int = 7
-) -> List[dict]:
+async def latest_headlines_for_category(category: Category, limit: int, recency_days: int = 7) -> List[dict]:
     seed_queries = {
         "tech": [""],
         "research": ["AI", "machine learning"],
@@ -75,10 +71,7 @@ async def latest_headlines_for_category(
     for doc in docs:
         if not doc.published_at:
             continue
-        published_at = (
-            doc.published_at if doc.published_at.tzinfo
-            else doc.published_at.replace(tzinfo=timezone.utc)
-        )
+        published_at = doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)
         if published_at >= cutoff:
             fresh_docs.append(doc)
 
@@ -90,9 +83,7 @@ async def latest_headlines_for_category(
 
 
 def _trending_payload(categories: List[Category], recency_days: int = 7, limit: int = 10) -> dict:
-    docs = filter_recent_docs(
-        store.all_recent_documents(categories, limit=200), recency_days
-    )
+    docs = filter_recent_docs(store.all_recent_documents(categories, limit=200), recency_days)
     topic_counter: Counter = Counter()
     for doc in docs:
         for tag in doc.entity_tags[:5]:
@@ -107,6 +98,7 @@ def _trending_payload(categories: List[Category], recency_days: int = 7, limit: 
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
+
 
 @router.get("/headlines")
 async def headlines(per_category: int = 4, recency_days: int = 7) -> dict:
@@ -132,9 +124,7 @@ async def headlines(per_category: int = 4, recency_days: int = 7) -> dict:
 
 
 @router.get("/headlines/{category}")
-async def headlines_by_category(
-    category: Category, limit: int = 10, recency_days: int = 7
-) -> dict:
+async def headlines_by_category(category: Category, limit: int = 10, recency_days: int = 7) -> dict:
     normalized_limit = max(1, min(limit, 20))
     normalized_recency = max(1, min(recency_days, 30))
     cache_key = _headline_cache_key(category, normalized_limit, normalized_recency)
@@ -151,9 +141,7 @@ async def headlines_by_category(
         "headlines": items,
         "trending_topics": topic_summary(docs),
     }
-    await cache.set_json(
-        "headline_category", cache_key, response, max(5, min(normalized_recency * 60, 180))
-    )
+    await cache.set_json("headline_category", cache_key, response, max(5, min(normalized_recency * 60, 180)))
     return response
 
 
@@ -176,16 +164,12 @@ async def category_page(category: Category, recency_days: int = 7) -> dict:
         "trending_topics": topic_summary(docs),
         "top_sources": Counter(doc.source for doc in docs).most_common(5),
     }
-    await cache.set_json(
-        "category_page", cache_key, response, max(5, min(normalized_recency * 60, 180))
-    )
+    await cache.set_json("category_page", cache_key, response, max(5, min(normalized_recency * 60, 180)))
     return response
 
 
 @router.get("/trending")
-async def trending(
-    category: Category | None = None, recency_days: int = 7, limit: int = 10
-) -> dict:
+async def trending(category: Category | None = None, recency_days: int = 7, limit: int = 10) -> dict:
     categories = [category] if category else ["tech", "research", "sports", "general"]
     return _trending_payload(
         categories,

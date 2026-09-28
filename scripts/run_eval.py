@@ -172,7 +172,9 @@ class SettingsOverride:
             setattr(settings, key, value)
 
 
-async def run_scenario(dataset: list[dict[str, Any]], scenario: EvalScenario, allow_provider_calls: bool = False) -> dict[str, Any]:
+async def run_scenario(
+    dataset: list[dict[str, Any]], scenario: EvalScenario, allow_provider_calls: bool = False
+) -> dict[str, Any]:
     embedding_service = EmbeddingService()
     if not allow_provider_calls:
         embedding_service.gemini_client = None
@@ -282,8 +284,14 @@ def to_markdown(results: list[dict[str, Any]]) -> str:
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Run offline retrieval evaluation for SignalScope AI.")
     parser.add_argument("--dataset", default=str(DEFAULT_DATASET), help="Path to eval JSON dataset.")
-    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Directory for JSON and Markdown reports.")
-    parser.add_argument("--allow-provider-calls", action="store_true", help="Allow configured embedding providers instead of forcing fallback embeddings.")
+    parser.add_argument(
+        "--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="Directory for JSON and Markdown reports."
+    )
+    parser.add_argument(
+        "--allow-provider-calls",
+        action="store_true",
+        help="Allow configured embedding providers instead of forcing fallback embeddings.",
+    )
     args = parser.parse_args()
 
     dataset_path = Path(args.dataset).resolve()

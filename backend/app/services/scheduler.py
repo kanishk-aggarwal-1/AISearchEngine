@@ -49,9 +49,7 @@ class SchedulerService:
         store = getattr(self.ingestion, "store", None)
         using_redis = bool(self.cache and getattr(self.cache, "using_redis", False))
         if using_redis:
-            acquired = await self.cache.acquire_lock(
-                "scheduler", self.owner, settings.scheduler_lock_seconds
-            )
+            acquired = await self.cache.acquire_lock("scheduler", self.owner, settings.scheduler_lock_seconds)
         elif store and hasattr(store, "acquire_scheduler_lock"):
             acquired = await asyncio.to_thread(
                 store.acquire_scheduler_lock,

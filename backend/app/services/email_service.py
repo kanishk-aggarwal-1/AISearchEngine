@@ -22,7 +22,11 @@ class EmailService:
     def _send_sync(self, recipient: str, subject: str, text_body: str, html_body: str) -> bool:
         message = EmailMessage()
         message["Subject"] = subject
-        from_label = f"{settings.smtp_from_name} <{settings.smtp_from_email}>" if settings.smtp_from_name else settings.smtp_from_email
+        from_label = (
+            f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+            if settings.smtp_from_name
+            else settings.smtp_from_email
+        )
         message["From"] = from_label
         message["To"] = recipient
         message.set_content(text_body)
@@ -31,11 +35,15 @@ class EmailService:
 
         try:
             if settings.smtp_use_ssl:
-                with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=settings.http_timeout_seconds) as server:
+                with smtplib.SMTP_SSL(
+                    settings.smtp_host, settings.smtp_port, timeout=settings.http_timeout_seconds
+                ) as server:
                     self._login_if_needed(server)
                     server.send_message(message)
             else:
-                with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=settings.http_timeout_seconds) as server:
+                with smtplib.SMTP(
+                    settings.smtp_host, settings.smtp_port, timeout=settings.http_timeout_seconds
+                ) as server:
                     server.ehlo()
                     if settings.smtp_use_tls:
                         server.starttls()

@@ -32,17 +32,14 @@ class PasskeyService:
             user_name=email,
             user_display_name=display_name,
             exclude_credentials=[
-                PublicKeyCredentialDescriptor(id=base64url_to_bytes(item["credential_id"]))
-                for item in existing
+                PublicKeyCredentialDescriptor(id=base64url_to_bytes(item["credential_id"])) for item in existing
             ],
             authenticator_selection=AuthenticatorSelectionCriteria(
                 resident_key=ResidentKeyRequirement.PREFERRED,
                 user_verification=UserVerificationRequirement.PREFERRED,
             ),
         )
-        challenge_id = self.store.save_passkey_challenge(
-            user_id, bytes_to_base64url(options.challenge), "registration"
-        )
+        challenge_id = self.store.save_passkey_challenge(user_id, bytes_to_base64url(options.challenge), "registration")
         return {"challenge_id": challenge_id, "publicKey": json.loads(options_to_json(options))}
 
     def finish_registration(self, user_id: str, challenge_id: str, credential: dict, name: str) -> None:
@@ -57,8 +54,12 @@ class PasskeyService:
         )
         transports = credential.get("response", {}).get("transports", [])
         self.store.save_passkey(
-            bytes_to_base64url(verified.credential_id), user_id, name,
-            bytes_to_base64url(verified.credential_public_key), verified.sign_count, transports,
+            bytes_to_base64url(verified.credential_id),
+            user_id,
+            name,
+            bytes_to_base64url(verified.credential_public_key),
+            verified.sign_count,
+            transports,
         )
 
     def begin_authentication(self, email: str) -> dict:
@@ -71,8 +72,7 @@ class PasskeyService:
         options = generate_authentication_options(
             rp_id=settings.webauthn_rp_id,
             allow_credentials=[
-                PublicKeyCredentialDescriptor(id=base64url_to_bytes(item["credential_id"]))
-                for item in credentials
+                PublicKeyCredentialDescriptor(id=base64url_to_bytes(item["credential_id"])) for item in credentials
             ],
             user_verification=UserVerificationRequirement.PREFERRED,
         )

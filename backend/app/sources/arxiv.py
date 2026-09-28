@@ -1,4 +1,4 @@
-﻿from datetime import datetime
+from datetime import datetime
 from typing import List
 
 import feedparser
@@ -31,7 +31,11 @@ class ArxivSourceProvider(SourceProvider):
             summary = getattr(entry, "summary", "").replace("\n", " ").strip()
             title = getattr(entry, "title", "").replace("\n", " ").strip()
             venue = getattr(entry, "arxiv_journal_ref", None)
-            authors = [getattr(author, "name", "").strip() for author in getattr(entry, "authors", []) if getattr(author, "name", "").strip()]
+            authors = [
+                getattr(author, "name", "").strip()
+                for author in getattr(entry, "authors", [])
+                if getattr(author, "name", "").strip()
+            ]
             links = getattr(entry, "links", []) or []
             code_url = None
             for link in links:

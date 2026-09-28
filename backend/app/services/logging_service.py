@@ -5,6 +5,7 @@ from backend.app.config import settings
 
 try:
     from pythonjsonlogger import jsonlogger as _jsonlogger
+
     _JSON_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _JSON_AVAILABLE = False
@@ -27,9 +28,7 @@ def setup_logging() -> None:
             rename_fields={"asctime": "timestamp", "levelname": "level", "name": "logger"},
         )
     else:
-        formatter = logging.Formatter(
-            "%(asctime)s level=%(levelname)s logger=%(name)s msg=%(message)s"
-        )
+        formatter = logging.Formatter("%(asctime)s level=%(levelname)s logger=%(name)s msg=%(message)s")
 
     handler.setFormatter(formatter)
     root.addHandler(handler)

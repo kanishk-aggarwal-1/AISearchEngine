@@ -68,9 +68,7 @@ class DocumentStore:
         try:
             with self._connection() as conn:
                 documents = conn.execute("SELECT COUNT(*) AS n FROM documents").fetchone()["n"]
-                distinct_sources = conn.execute(
-                    "SELECT COUNT(DISTINCT source) AS n FROM documents"
-                ).fetchone()["n"]
+                distinct_sources = conn.execute("SELECT COUNT(DISTINCT source) AS n FROM documents").fetchone()["n"]
             return {"documents_indexed": int(documents), "distinct_sources": int(distinct_sources)}
         except Exception:
             return {"documents_indexed": 0, "distinct_sources": 0}
@@ -438,27 +436,53 @@ class DocumentStore:
                 """
             )
 
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_category_published ON documents (category, published_at DESC)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_documents_category_published ON documents (category, published_at DESC)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_source ON documents (source)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_inserted_at ON documents (inserted_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_query_cache_updated_at ON query_cache (updated_at DESC)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_user_alerts_user_enabled ON user_alerts (user_id, enabled)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_user_bookmarks_user_created ON user_bookmarks (user_id, created_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_document_chunks_category_published ON document_chunks (category, published_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_document_chunks_canonical ON document_chunks (canonical_url, chunk_index)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions (user_id, last_seen_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_search_history_user_created ON search_history (user_id, created_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_saved_sessions_user_created ON saved_sessions (user_id, created_at DESC)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_user_bookmarks_user_created ON user_bookmarks (user_id, created_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_document_chunks_category_published ON document_chunks (category, published_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_document_chunks_canonical ON document_chunks (canonical_url, chunk_index)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions (user_id, last_seen_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_search_history_user_created ON search_history (user_id, created_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_saved_sessions_user_created ON saved_sessions (user_id, created_at DESC)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_source_status_category ON source_status (category, enabled)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ingestion_runs_started ON ingestion_runs (started_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ingestion_runs_status ON ingestion_runs (status, started_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_verification_user ON auth_verification_tokens (user_id, expires_at DESC)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_password_reset_user ON auth_password_reset_tokens (user_id, expires_at DESC)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_ingestion_runs_status ON ingestion_runs (status, started_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_auth_verification_user ON auth_verification_tokens (user_id, expires_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_auth_password_reset_user ON auth_password_reset_tokens (user_id, expires_at DESC)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires ON auth_sessions (expires_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_search_feedback_context ON search_feedback (context_id, created_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_alert_delivery_attempts_user ON alert_delivery_attempts (user_id, attempted_at)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_search_feedback_context ON search_feedback (context_id, created_at)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_alert_delivery_attempts_user ON alert_delivery_attempts (user_id, attempted_at)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations (user_id, updated_at)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation ON conversation_messages (conversation_id, created_at)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation ON conversation_messages (conversation_id, created_at)"
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_passkey_credentials_user ON passkey_credentials (user_id)")
             self._migrate_auth_tables_if_needed(conn)
             self._migrate_bookmarks_if_needed(conn)
@@ -787,7 +811,9 @@ class DocumentStore:
 
     def get_query_cache(self, query_key: str, max_age_minutes: int = 20) -> str | None:
         with self._connection() as conn:
-            row = conn.execute("SELECT response_json, updated_at FROM query_cache WHERE query_key = ?", (query_key,)).fetchone()
+            row = conn.execute(
+                "SELECT response_json, updated_at FROM query_cache WHERE query_key = ?", (query_key,)
+            ).fetchone()
         if not row:
             return None
         try:
@@ -887,11 +913,18 @@ class DocumentStore:
                 "INSERT INTO auth_sessions (token, user_id, created_at, last_seen_at, expires_at) VALUES (?, ?, ?, ?, ?)",
                 (token, user_id, now.isoformat(), now.isoformat(), (now + timedelta(days=30)).isoformat()),
             )
-        return AuthSessionResponse(token=token, user=AuthUser(
-            user_id=row["user_id"], email=row["email"], display_name=row["display_name"],
-            created_at=row["created_at"], is_admin=bool(row["is_admin"]),
-            email_verified=bool(row["email_verified"]), mfa_enabled=bool(row["mfa_enabled"]),
-        ))
+        return AuthSessionResponse(
+            token=token,
+            user=AuthUser(
+                user_id=row["user_id"],
+                email=row["email"],
+                display_name=row["display_name"],
+                created_at=row["created_at"],
+                is_admin=bool(row["is_admin"]),
+                email_verified=bool(row["email_verified"]),
+                mfa_enabled=bool(row["mfa_enabled"]),
+            ),
+        )
 
     def oauth_session(self, provider: str, subject: str, email: str, display_name: str) -> AuthSessionResponse:
         now = datetime.now(timezone.utc).isoformat()
@@ -952,11 +985,21 @@ class DocumentStore:
             row = conn.execute("SELECT user_id FROM auth_users WHERE email = ?", (email.lower(),)).fetchone()
         return dict(row) if row else None
 
-    def save_passkey(self, credential_id: str, user_id: str, name: str, public_key: str, sign_count: int, transports: list[str]) -> None:
+    def save_passkey(
+        self, credential_id: str, user_id: str, name: str, public_key: str, sign_count: int, transports: list[str]
+    ) -> None:
         with self._connection() as conn:
             conn.execute(
                 "INSERT INTO passkey_credentials (credential_id, user_id, name, public_key, sign_count, transports_json, created_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)",
-                (credential_id, user_id, name, public_key, sign_count, json.dumps(transports), datetime.now(timezone.utc).isoformat()),
+                (
+                    credential_id,
+                    user_id,
+                    name,
+                    public_key,
+                    sign_count,
+                    json.dumps(transports),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
             )
 
     def get_passkey(self, credential_id: str) -> dict | None:
@@ -1007,9 +1050,7 @@ class DocumentStore:
 
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
         with self._connection() as conn:
-            row = conn.execute(
-                "SELECT password_hash FROM auth_users WHERE user_id = ?", (user_id,)
-            ).fetchone()
+            row = conn.execute("SELECT password_hash FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
             if not row or not self._verify_password(current_password, row["password_hash"]):
                 return False
             conn.execute(
@@ -1029,8 +1070,11 @@ class DocumentStore:
         if not row:
             return None
         return AuthUser(
-            user_id=row["user_id"], email=row["email"], display_name=row["display_name"],
-            created_at=row["created_at"], is_admin=bool(row["is_admin"]),
+            user_id=row["user_id"],
+            email=row["email"],
+            display_name=row["display_name"],
+            created_at=row["created_at"],
+            is_admin=bool(row["is_admin"]),
             email_verified=bool(row["email_verified"]),
             mfa_enabled=bool(row["mfa_enabled"]),
         )
@@ -1044,14 +1088,34 @@ class DocumentStore:
             if not user:
                 return {}
             profile = conn.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,)).fetchone()
-            follows = conn.execute("SELECT entity, created_at FROM user_follows WHERE user_id = ?", (user_id,)).fetchall()
-            history = conn.execute("SELECT query, categories_json, context_id, created_at FROM search_history WHERE user_id = ?", (user_id,)).fetchall()
-            sessions = conn.execute("SELECT context_id, label, created_at FROM saved_sessions WHERE user_id = ?", (user_id,)).fetchall()
-            alerts = conn.execute("SELECT query, categories_json, enabled, last_triggered_at FROM user_alerts WHERE user_id = ?", (user_id,)).fetchall()
-            bookmarks = conn.execute("SELECT source_json, created_at FROM user_bookmarks WHERE user_id = ?", (user_id,)).fetchall()
-            conversations = conn.execute("SELECT conversation_id, context_id, title, created_at, updated_at FROM conversations WHERE user_id = ?", (user_id,)).fetchall()
-            passkeys = conn.execute("SELECT credential_id, name, created_at, last_used_at FROM passkey_credentials WHERE user_id = ?", (user_id,)).fetchall()
-            identities = conn.execute("SELECT provider, created_at FROM auth_identities WHERE user_id = ?", (user_id,)).fetchall()
+            follows = conn.execute(
+                "SELECT entity, created_at FROM user_follows WHERE user_id = ?", (user_id,)
+            ).fetchall()
+            history = conn.execute(
+                "SELECT query, categories_json, context_id, created_at FROM search_history WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+            sessions = conn.execute(
+                "SELECT context_id, label, created_at FROM saved_sessions WHERE user_id = ?", (user_id,)
+            ).fetchall()
+            alerts = conn.execute(
+                "SELECT query, categories_json, enabled, last_triggered_at FROM user_alerts WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+            bookmarks = conn.execute(
+                "SELECT source_json, created_at FROM user_bookmarks WHERE user_id = ?", (user_id,)
+            ).fetchall()
+            conversations = conn.execute(
+                "SELECT conversation_id, context_id, title, created_at, updated_at FROM conversations WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+            passkeys = conn.execute(
+                "SELECT credential_id, name, created_at, last_used_at FROM passkey_credentials WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+            identities = conn.execute(
+                "SELECT provider, created_at FROM auth_identities WHERE user_id = ?", (user_id,)
+            ).fetchall()
         return {
             "account": dict(user),
             "profile": dict(profile) if profile else None,
@@ -1095,9 +1159,7 @@ class DocumentStore:
             ).fetchone()
             if not row or not row["mfa_enabled"] or not verify_code(row["mfa_secret"] or "", code):
                 return False
-            conn.execute(
-                "UPDATE auth_users SET mfa_secret = NULL, mfa_enabled = 0 WHERE user_id = ?", (user_id,)
-            )
+            conn.execute("UPDATE auth_users SET mfa_secret = NULL, mfa_enabled = 0 WHERE user_id = ?", (user_id,))
         return True
 
     def issue_email_change_token(self, user_id: str, new_email: str) -> tuple[str, str]:
@@ -1118,9 +1180,7 @@ class DocumentStore:
     def confirm_email_change(self, token: str) -> AuthUser | None:
         now = datetime.now(timezone.utc)
         with self._connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM auth_email_change_tokens WHERE token = ?", (token.strip(),)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM auth_email_change_tokens WHERE token = ?", (token.strip(),)).fetchone()
             if not row or row["used_at"] or datetime.fromisoformat(row["expires_at"]) < now:
                 return None
             try:
@@ -1143,10 +1203,25 @@ class DocumentStore:
 
     def delete_account(self, user_id: str) -> None:
         tables = [
-            "auth_sessions", "auth_verification_tokens", "auth_password_reset_tokens", "auth_email_change_tokens",
-            "user_profiles", "user_follows", "search_history", "saved_sessions",
-            "user_alerts", "alert_delivery_settings", "alert_delivery_attempts", "user_bookmarks", "contexts", "search_feedback", "conversations", "shared_contexts",
-            "auth_identities", "passkey_credentials", "passkey_challenges",
+            "auth_sessions",
+            "auth_verification_tokens",
+            "auth_password_reset_tokens",
+            "auth_email_change_tokens",
+            "user_profiles",
+            "user_follows",
+            "search_history",
+            "saved_sessions",
+            "user_alerts",
+            "alert_delivery_settings",
+            "alert_delivery_attempts",
+            "user_bookmarks",
+            "contexts",
+            "search_feedback",
+            "conversations",
+            "shared_contexts",
+            "auth_identities",
+            "passkey_credentials",
+            "passkey_challenges",
         ]
         with self._connection() as conn:
             conn.execute(
@@ -1215,7 +1290,9 @@ class DocumentStore:
                 self.logger.warning("audit password_reset_unknown_email email=%s", normalized_email)
                 return None
             token = secrets.token_urlsafe(24)
-            conn.execute("DELETE FROM auth_password_reset_tokens WHERE user_id = ? AND used_at IS NULL", (row["user_id"],))
+            conn.execute(
+                "DELETE FROM auth_password_reset_tokens WHERE user_id = ? AND used_at IS NULL", (row["user_id"],)
+            )
             conn.execute(
                 """
                 INSERT INTO auth_password_reset_tokens (token, user_id, created_at, expires_at, used_at)
@@ -1242,7 +1319,10 @@ class DocumentStore:
             if expires_at < now:
                 return None
             conn.execute("UPDATE auth_password_reset_tokens SET used_at = ? WHERE token = ?", (now_iso, token.strip()))
-            conn.execute("UPDATE auth_users SET password_hash = ? WHERE user_id = ?", (self._hash_password(new_password), row["user_id"]))
+            conn.execute(
+                "UPDATE auth_users SET password_hash = ? WHERE user_id = ?",
+                (self._hash_password(new_password), row["user_id"]),
+            )
             conn.execute("DELETE FROM auth_sessions WHERE user_id = ?", (row["user_id"],))
         self.logger.info("audit password_reset_completed user_id=%s", row["user_id"])
         return AuthMessage(message="Password updated. Please sign in again.")
@@ -1345,11 +1425,11 @@ class DocumentStore:
 
     def delete_saved_session(self, user_id: str, session_id: int) -> None:
         with self._connection() as conn:
-            conn.execute(
-                "DELETE FROM saved_sessions WHERE user_id = ? AND id = ?", (user_id, session_id)
-            )
+            conn.execute("DELETE FROM saved_sessions WHERE user_id = ? AND id = ?", (user_id, session_id))
 
-    def record_source_result(self, source_name: str, category: str, item_count: int, error: str = "", latency_ms: float | None = None) -> None:
+    def record_source_result(
+        self, source_name: str, category: str, item_count: int, error: str = "", latency_ms: float | None = None
+    ) -> None:
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             current = conn.execute(
@@ -1359,7 +1439,9 @@ class DocumentStore:
             enabled = int(current["enabled"]) if current else 1
             success_count = int(current["success_count"]) if current and current["success_count"] is not None else 0
             failure_count = int(current["failure_count"]) if current and current["failure_count"] is not None else 0
-            prior_latency = float(current["average_latency_ms"]) if current and current["average_latency_ms"] is not None else None
+            prior_latency = (
+                float(current["average_latency_ms"]) if current and current["average_latency_ms"] is not None else None
+            )
             next_success = success_count + (0 if error else 1)
             next_failure = failure_count + (1 if error else 0)
             next_latency = prior_latency
@@ -1409,7 +1491,10 @@ class DocumentStore:
         with self._connection() as conn:
             existing = conn.execute("SELECT * FROM source_status WHERE source_name = ?", (source_name,)).fetchone()
             if existing:
-                conn.execute("UPDATE source_status SET enabled = ?, updated_at = ? WHERE source_name = ?", (int(enabled), now_iso, source_name))
+                conn.execute(
+                    "UPDATE source_status SET enabled = ?, updated_at = ? WHERE source_name = ?",
+                    (int(enabled), now_iso, source_name),
+                )
             else:
                 conn.execute(
                     """
@@ -1433,7 +1518,9 @@ class DocumentStore:
             params.append(source_name)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         with self._connection() as conn:
-            rows = conn.execute(f"SELECT * FROM source_status {where} ORDER BY category, source_name", params).fetchall()
+            rows = conn.execute(
+                f"SELECT * FROM source_status {where} ORDER BY category, source_name", params
+            ).fetchall()
         return [
             SourceStatus(
                 source_name=row["source_name"],
@@ -1534,7 +1621,9 @@ class DocumentStore:
             except Exception:
                 buckets["unknown"] += 1
                 continue
-            freshest_at = ts.isoformat() if freshest_at is None or ts > datetime.fromisoformat(freshest_at) else freshest_at
+            freshest_at = (
+                ts.isoformat() if freshest_at is None or ts > datetime.fromisoformat(freshest_at) else freshest_at
+            )
             stalest_at = ts.isoformat() if stalest_at is None or ts < datetime.fromisoformat(stalest_at) else stalest_at
             if now - ts <= timedelta(hours=24):
                 buckets["healthy"] += 1
@@ -1562,8 +1651,14 @@ class DocumentStore:
         with self._connection() as conn:
             statements = {
                 "sessions": ("DELETE FROM auth_sessions WHERE expires_at <= ?", (now.isoformat(),)),
-                "verification_tokens": ("DELETE FROM auth_verification_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", (now.isoformat(),)),
-                "reset_tokens": ("DELETE FROM auth_password_reset_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", (now.isoformat(),)),
+                "verification_tokens": (
+                    "DELETE FROM auth_verification_tokens WHERE expires_at <= ? OR used_at IS NOT NULL",
+                    (now.isoformat(),),
+                ),
+                "reset_tokens": (
+                    "DELETE FROM auth_password_reset_tokens WHERE expires_at <= ? OR used_at IS NOT NULL",
+                    (now.isoformat(),),
+                ),
                 "contexts": ("DELETE FROM contexts WHERE created_at < ?", (context_cutoff,)),
                 "query_cache": ("DELETE FROM query_cache WHERE updated_at < ?", (cache_cutoff,)),
             }
@@ -1662,7 +1757,9 @@ class DocumentStore:
                 (rule.user_id, rule.query, json.dumps(rule.categories), int(rule.enabled)),
             )
             alert_id = int(cursor.lastrowid)
-        return AlertRule(id=alert_id, user_id=rule.user_id, query=rule.query, categories=rule.categories, enabled=rule.enabled)
+        return AlertRule(
+            id=alert_id, user_id=rule.user_id, query=rule.query, categories=rule.categories, enabled=rule.enabled
+        )
 
     def get_alerts(self, user_id: str, limit: int = 200, offset: int = 0) -> List[AlertRule]:
         with self._connection() as conn:
@@ -1689,13 +1786,13 @@ class DocumentStore:
             )
             if not cursor.rowcount:
                 return None
-        return AlertRule(id=alert_id, user_id=user_id, query=rule.query, categories=rule.categories, enabled=rule.enabled)
+        return AlertRule(
+            id=alert_id, user_id=user_id, query=rule.query, categories=rule.categories, enabled=rule.enabled
+        )
 
     def delete_alert(self, user_id: str, alert_id: int) -> bool:
         with self._connection() as conn:
-            cursor = conn.execute(
-                "DELETE FROM user_alerts WHERE id = ? AND user_id = ?", (alert_id, user_id)
-            )
+            cursor = conn.execute("DELETE FROM user_alerts WHERE id = ? AND user_id = ?", (alert_id, user_id))
             return bool(cursor.rowcount)
 
     def get_enabled_alerts(self) -> List[dict]:
@@ -1751,7 +1848,16 @@ class DocumentStore:
                     delivery_hour = excluded.delivery_hour,
                     updated_at = excluded.updated_at
                 """,
-                (settings_obj.user_id, settings_obj.webhook_url, settings_obj.digest_mode, int(settings_obj.enabled), int(settings_obj.email_enabled), settings_obj.timezone, settings_obj.delivery_hour, now_iso),
+                (
+                    settings_obj.user_id,
+                    settings_obj.webhook_url,
+                    settings_obj.digest_mode,
+                    int(settings_obj.enabled),
+                    int(settings_obj.email_enabled),
+                    settings_obj.timezone,
+                    settings_obj.delivery_hour,
+                    now_iso,
+                ),
             )
         return settings_obj
 
@@ -1770,7 +1876,9 @@ class DocumentStore:
             delivery_hour=int(row["delivery_hour"]),
         )
 
-    def record_alert_delivery(self, alert_id: int, user_id: str, channel: str, status: str, status_code: int | None = None, error: str = "") -> None:
+    def record_alert_delivery(
+        self, alert_id: int, user_id: str, channel: str, status: str, status_code: int | None = None, error: str = ""
+    ) -> None:
         with self._connection() as conn:
             conn.execute(
                 "INSERT INTO alert_delivery_attempts (alert_id, user_id, channel, status, status_code, error, attempted_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -1785,7 +1893,9 @@ class DocumentStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def add_bookmark(self, user_id: str, source: SourceDoc, folder: str = "", tags: List[str] | None = None, notes: str = "") -> BookmarkItem:
+    def add_bookmark(
+        self, user_id: str, source: SourceDoc, folder: str = "", tags: List[str] | None = None, notes: str = ""
+    ) -> BookmarkItem:
         canonical_url = self.canonicalize_url(source.url, source.source, source.title)
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
@@ -1797,7 +1907,17 @@ class DocumentStore:
                     ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
-                (user_id, canonical_url, user_id, canonical_url, json.dumps(source.model_dump(mode="json")), now_iso, folder.strip(), json.dumps(tags or []), notes.strip()),
+                (
+                    user_id,
+                    canonical_url,
+                    user_id,
+                    canonical_url,
+                    json.dumps(source.model_dump(mode="json")),
+                    now_iso,
+                    folder.strip(),
+                    json.dumps(tags or []),
+                    notes.strip(),
+                ),
             )
             row = conn.execute(
                 "SELECT * FROM user_bookmarks WHERE user_id = ? AND canonical_url = ?",
@@ -1808,10 +1928,14 @@ class DocumentStore:
             user_id=user_id,
             source=SourceDoc.model_validate(json.loads(row["source_json"])),
             saved_at=row["created_at"],
-            folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
+            folder=row["folder"],
+            tags=json.loads(row["tags_json"]),
+            notes=row["notes"],
         )
 
-    def get_bookmarks(self, user_id: str, limit: int = 200, offset: int = 0, folder: str = "", query: str = "") -> List[BookmarkItem]:
+    def get_bookmarks(
+        self, user_id: str, limit: int = 200, offset: int = 0, folder: str = "", query: str = ""
+    ) -> List[BookmarkItem]:
         clauses = ["user_id = ?"]
         params: list = [user_id]
         if folder.strip():
@@ -1833,12 +1957,16 @@ class DocumentStore:
                 user_id=row["user_id"],
                 source=SourceDoc.model_validate(json.loads(row["source_json"])),
                 saved_at=row["created_at"],
-                folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
+                folder=row["folder"],
+                tags=json.loads(row["tags_json"]),
+                notes=row["notes"],
             )
             for row in rows
         ]
 
-    def update_bookmark_metadata(self, user_id: str, bookmark_id: int, folder: str, tags: List[str], notes: str) -> BookmarkItem | None:
+    def update_bookmark_metadata(
+        self, user_id: str, bookmark_id: int, folder: str, tags: List[str], notes: str
+    ) -> BookmarkItem | None:
         with self._connection() as conn:
             cursor = conn.execute(
                 "UPDATE user_bookmarks SET folder = ?, tags_json = ?, notes = ? WHERE user_id = ? AND id = ?",
@@ -1846,10 +1974,17 @@ class DocumentStore:
             )
             if not cursor.rowcount:
                 return None
-            row = conn.execute("SELECT * FROM user_bookmarks WHERE user_id = ? AND id = ?", (user_id, bookmark_id)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM user_bookmarks WHERE user_id = ? AND id = ?", (user_id, bookmark_id)
+            ).fetchone()
         return BookmarkItem(
-            id=row["id"], user_id=user_id, source=SourceDoc.model_validate(json.loads(row["source_json"])),
-            saved_at=row["created_at"], folder=row["folder"], tags=json.loads(row["tags_json"]), notes=row["notes"],
+            id=row["id"],
+            user_id=user_id,
+            source=SourceDoc.model_validate(json.loads(row["source_json"])),
+            saved_at=row["created_at"],
+            folder=row["folder"],
+            tags=json.loads(row["tags_json"]),
+            notes=row["notes"],
         )
 
     def delete_bookmark(self, user_id: str, bookmark_id: int) -> None:
@@ -1872,9 +2007,7 @@ class DocumentStore:
                 (context_id, user_id, query, payload, now_iso),
             )
 
-    def add_search_feedback(
-        self, user_id: str, context_id: str, helpful: bool, comment: str = ""
-    ) -> None:
+    def add_search_feedback(self, user_id: str, context_id: str, helpful: bool, comment: str = "") -> None:
         with self._connection() as conn:
             conn.execute(
                 "INSERT INTO search_feedback (user_id, context_id, helpful, comment, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -1892,9 +2025,17 @@ class DocumentStore:
                 "INSERT INTO conversations (conversation_id, user_id, context_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (conversation_id, user_id, context_id, title.strip() or context[0][:200], now, now),
             )
-        return {"conversation_id": conversation_id, "context_id": context_id, "title": title.strip() or context[0][:200], "created_at": now, "updated_at": now}
+        return {
+            "conversation_id": conversation_id,
+            "context_id": context_id,
+            "title": title.strip() or context[0][:200],
+            "created_at": now,
+            "updated_at": now,
+        }
 
-    def add_conversation_message(self, conversation_id: str, user_id: str, role: str, content: str, key_points: List[str] | None = None) -> dict | None:
+    def add_conversation_message(
+        self, conversation_id: str, user_id: str, role: str, content: str, key_points: List[str] | None = None
+    ) -> dict | None:
         now = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             owner = conn.execute(
@@ -1924,7 +2065,13 @@ class DocumentStore:
             ).fetchall()
         result = dict(row)
         result["messages"] = [
-            {"id": item["id"], "role": item["role"], "content": item["content"], "key_points": json.loads(item["key_points_json"]), "created_at": item["created_at"]}
+            {
+                "id": item["id"],
+                "role": item["role"],
+                "content": item["content"],
+                "key_points": json.loads(item["key_points_json"]),
+                "created_at": item["created_at"],
+            }
             for item in messages
         ]
         return result
@@ -1989,9 +2136,7 @@ class DocumentStore:
 
     def release_scheduler_lock(self, name: str, owner: str) -> None:
         with self._connection() as conn:
-            conn.execute(
-                "DELETE FROM scheduler_locks WHERE lock_name = ? AND owner = ?", (name, owner)
-            )
+            conn.execute("DELETE FROM scheduler_locks WHERE lock_name = ? AND owner = ?", (name, owner))
 
     def get_context(self, context_id: str, user_id: str) -> tuple[str, List[SourceDoc]] | None:
         with self._connection() as conn:
@@ -2012,7 +2157,9 @@ class DocumentStore:
         parsed = urlparse(clean)
         netloc = parsed.netloc.lower().replace("www.", "")
         path = re.sub(r"/+", "/", parsed.path or "/")
-        query_pairs = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith("utm_")]
+        query_pairs = [
+            (k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if not k.lower().startswith("utm_")
+        ]
         query = urlencode(sorted(query_pairs))
         return urlunparse((parsed.scheme or "https", netloc, path.rstrip("/") or "/", "", query, ""))
 

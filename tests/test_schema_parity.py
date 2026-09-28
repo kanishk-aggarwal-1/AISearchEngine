@@ -9,6 +9,7 @@ If these drift, production breaks in ways the SQLite test suite can't see.
 This test builds both schemas on a throwaway SQLite database and asserts they
 produce the same tables and columns, turning silent drift into a CI failure.
 """
+
 import sqlite3
 import tempfile
 import unittest
@@ -29,12 +30,7 @@ def _columns_for(db_path: str) -> dict[str, set[str]]:
     """Return {table_name: {column_names}} for a SQLite database."""
     conn = sqlite3.connect(db_path)
     try:
-        tables = {
-            row[0]
-            for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
         tables -= _TRANSIENT_TABLES
         schema: dict[str, set[str]] = {}
         for table in tables:
@@ -56,9 +52,10 @@ class SchemaParityTests(unittest.TestCase):
             # 2. Schema produced by running Alembic migrations
             alembic_db_path = str(Path(tmpdir) / "alembic.db")
             cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
-            with patch(
-                "backend.app.config.settings.sqlite_database_path", alembic_db_path
-            ), patch("backend.app.config.settings.database_url", ""):
+            with (
+                patch("backend.app.config.settings.sqlite_database_path", alembic_db_path),
+                patch("backend.app.config.settings.database_url", ""),
+            ):
                 command.upgrade(cfg, "head")
             alembic_schema = _columns_for(alembic_db_path)
 
@@ -68,11 +65,13 @@ class SchemaParityTests(unittest.TestCase):
             missing_in_alembic = init_tables - alembic_tables
             missing_in_init = alembic_tables - init_tables
             self.assertEqual(
-                missing_in_alembic, set(),
+                missing_in_alembic,
+                set(),
                 f"Tables in _init_db() but missing from Alembic migrations: {missing_in_alembic}",
             )
             self.assertEqual(
-                missing_in_init, set(),
+                missing_in_init,
+                set(),
                 f"Tables in Alembic but missing from _init_db(): {missing_in_init}",
             )
 
@@ -81,7 +80,8 @@ class SchemaParityTests(unittest.TestCase):
                 init_cols = init_schema[table]
                 alembic_cols = alembic_schema[table]
                 self.assertEqual(
-                    init_cols, alembic_cols,
+                    init_cols,
+                    alembic_cols,
                     f"Column drift in '{table}':\n"
                     f"  only in _init_db(): {init_cols - alembic_cols}\n"
                     f"  only in Alembic:    {alembic_cols - init_cols}",
