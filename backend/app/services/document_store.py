@@ -73,6 +73,10 @@ class DocumentStore:
         except Exception:
             return {"documents_indexed": 0, "distinct_sources": 0}
 
+    @staticmethod
+    def _normalize_email(email: str) -> str:
+        return email.strip().lower()
+
     @contextmanager
     def _connection(self):
         conn = self._connect()
@@ -827,7 +831,7 @@ class DocumentStore:
         return row["response_json"]
 
     def create_user(self, email: str, password: str, display_name: str) -> AuthUser:
-        normalized_email = email.strip().lower()
+        normalized_email = self._normalize_email(email)
         now_iso = datetime.now(timezone.utc).isoformat()
         user_id = f"user_{secrets.token_hex(6)}"
         password_hash = self._hash_password(password)
@@ -868,7 +872,7 @@ class DocumentStore:
         )
 
     def authenticate_user(self, email: str, password: str, otp_code: str = "") -> AuthSessionResponse | None:
-        normalized_email = email.strip().lower()
+        normalized_email = self._normalize_email(email)
         with self._connection() as conn:
             row = conn.execute("SELECT * FROM auth_users WHERE email = ?", (normalized_email,)).fetchone()
             if not row or not self._verify_password(password, row["password_hash"]):
@@ -1163,7 +1167,7 @@ class DocumentStore:
         return True
 
     def issue_email_change_token(self, user_id: str, new_email: str) -> tuple[str, str]:
-        normalized = new_email.strip().lower()
+        normalized = self._normalize_email(new_email)
         token = secrets.token_urlsafe(24)
         now = datetime.now(timezone.utc)
         expires = now + timedelta(hours=1)
@@ -1281,7 +1285,7 @@ class DocumentStore:
         )
 
     def issue_password_reset_token(self, email: str) -> tuple[str, str] | None:
-        normalized_email = email.strip().lower()
+        normalized_email = self._normalize_email(email)
         now = datetime.now(timezone.utc)
         expires_at = now + timedelta(hours=1)
         with self._connection() as conn:
