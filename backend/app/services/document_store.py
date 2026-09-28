@@ -643,7 +643,7 @@ class DocumentStore:
                     float(doc.credibility_score),
                     doc.published_at.isoformat() if doc.published_at else None,
                     now_iso,
-                    json.dumps(embeddings.get(canonical_url)) if embeddings.get(canonical_url) else None,
+                    json.dumps(emb) if (emb := embeddings.get(canonical_url)) else None,
                     json.dumps(doc.entity_tags),
                     json.dumps(doc.research_metadata.model_dump() if doc.research_metadata else None),
                     json.dumps(doc.sports_metadata.model_dump() if doc.sports_metadata else None),
@@ -692,7 +692,7 @@ class DocumentStore:
                             doc.category,
                             doc.published_at.isoformat() if doc.published_at else None,
                             chunk_text,
-                            json.dumps(chunk_embeddings.get(chunk_id)) if chunk_embeddings.get(chunk_id) else None,
+                            json.dumps(cemb) if (cemb := chunk_embeddings.get(chunk_id)) else None,
                             now_iso,
                         ),
                     )
