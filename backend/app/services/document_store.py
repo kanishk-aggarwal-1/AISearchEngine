@@ -67,8 +67,8 @@ class DocumentStore:
         total documents indexed and the number of distinct sources."""
         try:
             with self._connection() as conn:
-                documents = conn.execute("SELECT COUNT(*) AS n FROM documents").fetchone()["n"]
-                distinct_sources = conn.execute("SELECT COUNT(DISTINCT source) AS n FROM documents").fetchone()["n"]
+                documents = conn.execute("SELECT COUNT(*) AS document_count FROM documents").fetchone()["document_count"]
+                distinct_sources = conn.execute("SELECT COUNT(DISTINCT source) AS source_count FROM documents").fetchone()["source_count"]
             return {"documents_indexed": int(documents), "distinct_sources": int(distinct_sources)}
         except Exception:
             return {"documents_indexed": 0, "distinct_sources": 0}
@@ -747,15 +747,15 @@ class DocumentStore:
             ORDER BY inserted_at DESC
             LIMIT ?
         """
-        out: dict[str, List[float]] = {}
+        result: dict[str, List[float]] = {}
         with self._connection() as conn:
             rows = conn.execute(sql, [*categories, limit]).fetchall()
         for row in rows:
             try:
-                out[row["canonical_url"]] = json.loads(row["embedding_json"])
+                result[row["canonical_url"]] = json.loads(row["embedding_json"])
             except Exception:
                 continue
-        return out
+        return result
 
     def chunk_embedding_map(self, categories: List[Category], limit: int = 400) -> dict[str, List[float]]:
         if not categories:
@@ -768,15 +768,15 @@ class DocumentStore:
             ORDER BY inserted_at DESC
             LIMIT ?
         """
-        out: dict[str, List[float]] = {}
+        result: dict[str, List[float]] = {}
         with self._connection() as conn:
             rows = conn.execute(sql, [*categories, limit]).fetchall()
         for row in rows:
             try:
-                out[row["chunk_id"]] = json.loads(row["embedding_json"])
+                result[row["chunk_id"]] = json.loads(row["embedding_json"])
             except Exception:
                 continue
-        return out
+        return result
 
     def search_chunks(self, query: str, categories: List[Category], limit: int = 40) -> List[ChunkHit]:
         if not categories:
@@ -1145,9 +1145,9 @@ class DocumentStore:
                 "UPDATE auth_email_change_tokens SET used_at = ? WHERE token = ?",
                 (now.isoformat(), token.strip()),
             )
-        return self.update_account(row["user_id"], self._display_name(row["user_id"]))
+        return self.update_account(row["user_id"], self._get_user_display_name(row["user_id"]))
 
-    def _display_name(self, user_id: str) -> str:
+    def _get_user_display_name(self, user_id: str) -> str:
         with self._connection() as conn:
             row = conn.execute("SELECT display_name FROM auth_users WHERE user_id = ?", (user_id,)).fetchone()
         return row["display_name"] if row else "User"
@@ -1382,18 +1382,18 @@ class DocumentStore:
             enabled = int(current["enabled"]) if current else 1
             success_count = int(current["success_count"]) if current and current["success_count"] is not None else 0
             failure_count = int(current["failure_count"]) if current and current["failure_count"] is not None else 0
-            prior_latency = (
+            stored_avg_latency_ms = (
                 float(current["average_latency_ms"]) if current and current["average_latency_ms"] is not None else None
             )
-            next_success = success_count + (0 if error else 1)
-            next_failure = failure_count + (1 if error else 0)
-            next_latency = prior_latency
+            updated_success_count = success_count + (0 if error else 1)
+            updated_failure_count = failure_count + (1 if error else 0)
+            updated_avg_latency_ms = stored_avg_latency_ms
             if latency_ms is not None:
                 total_runs = max(success_count + failure_count, 0)
-                if prior_latency is None:
-                    next_latency = round(float(latency_ms), 2)
+                if stored_avg_latency_ms is None:
+                    updated_avg_latency_ms = round(float(latency_ms), 2)
                 else:
-                    next_latency = round(((prior_latency * total_runs) + float(latency_ms)) / max(total_runs + 1, 1), 2)
+                    updated_avg_latency_ms = round(((stored_avg_latency_ms * total_runs) + float(latency_ms)) / max(total_runs + 1, 1), 2)
             conn.execute(
                 """
                 INSERT INTO source_status (
@@ -1417,14 +1417,14 @@ class DocumentStore:
                     source_name,
                     category,
                     enabled,
-                    next_success,
-                    next_failure,
+                    updated_success_count,
+                    updated_failure_count,
                     now_iso,
                     None if error else now_iso,
                     error,
                     now_iso if error else None,
                     item_count,
-                    next_latency,
+                    updated_avg_latency_ms,
                     now_iso,
                 ),
             )
@@ -1558,17 +1558,17 @@ class DocumentStore:
                 buckets["unknown"] += 1
                 continue
             try:
-                ts = datetime.fromisoformat(status.last_success_at)
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
+                last_success_dt = datetime.fromisoformat(status.last_success_at)
+                if last_success_dt.tzinfo is None:
+                    last_success_dt = last_success_dt.replace(tzinfo=timezone.utc)
             except Exception:
                 buckets["unknown"] += 1
                 continue
             freshest_at = (
-                ts.isoformat() if freshest_at is None or ts > datetime.fromisoformat(freshest_at) else freshest_at
+                last_success_dt.isoformat() if freshest_at is None or last_success_dt > datetime.fromisoformat(freshest_at) else freshest_at
             )
-            stalest_at = ts.isoformat() if stalest_at is None or ts < datetime.fromisoformat(stalest_at) else stalest_at
-            if now - ts <= timedelta(hours=24):
+            stalest_at = last_success_dt.isoformat() if stalest_at is None or last_success_dt < datetime.fromisoformat(stalest_at) else stalest_at
+            if now - last_success_dt <= timedelta(hours=24):
                 buckets["healthy"] += 1
             else:
                 buckets["stale"] += 1
@@ -1775,7 +1775,7 @@ class DocumentStore:
         with self._connection() as conn:
             conn.execute("UPDATE user_alerts SET last_triggered_at = ? WHERE id = ?", (now_iso, alert_id))
 
-    def upsert_alert_delivery(self, settings_obj: AlertDeliverySettings) -> AlertDeliverySettings:
+    def upsert_alert_delivery(self, delivery_settings: AlertDeliverySettings) -> AlertDeliverySettings:
         now_iso = datetime.now(timezone.utc).isoformat()
         with self._connection() as conn:
             conn.execute(
@@ -1792,17 +1792,17 @@ class DocumentStore:
                     updated_at = excluded.updated_at
                 """,
                 (
-                    settings_obj.user_id,
-                    settings_obj.webhook_url,
-                    settings_obj.digest_mode,
-                    int(settings_obj.enabled),
-                    int(settings_obj.email_enabled),
-                    settings_obj.timezone,
-                    settings_obj.delivery_hour,
+                    delivery_settings.user_id,
+                    delivery_settings.webhook_url,
+                    delivery_settings.digest_mode,
+                    int(delivery_settings.enabled),
+                    int(delivery_settings.email_enabled),
+                    delivery_settings.timezone,
+                    delivery_settings.delivery_hour,
                     now_iso,
                 ),
             )
-        return settings_obj
+        return delivery_settings
 
     def get_alert_delivery(self, user_id: str) -> AlertDeliverySettings:
         with self._connection() as conn:
