@@ -122,7 +122,7 @@ class RetrieverService:
         return token.strip(".,:;!?()[]{}\"'").lower()
 
     def _tokenize(self, text: str) -> set[str]:
-        tokens = {self._normalize_token(token) for token in text.split() if self._normalize_token(token)}
+        tokens = {n for token in text.split() if (n := self._normalize_token(token))}
         return {token for token in tokens if token not in self.STOPWORDS and len(token) > 1}
 
     def _classify_query_category(self, query_tokens: set[str]) -> str:
@@ -193,6 +193,7 @@ class RetrieverService:
 
         follows_lower = {item.lower() for item in follows}
         pref_categories = set(profile.preferred_categories)
+        query_phrase = " ".join(query.lower().split())
 
         computed_embeddings: Dict[str, List[float]] = {}
 
@@ -200,14 +201,9 @@ class RetrieverService:
             text_tokens = self._tokenize(f"{doc.title} {doc.summary}")
             expanded_text_tokens = self._expanded_tokens(text_tokens)
             lexical = len(expanded_query_tokens.intersection(expanded_text_tokens))
-            coverage = 0.0
-            if expanded_query_tokens:
-                coverage = len(expanded_query_tokens.intersection(expanded_text_tokens)) / max(
-                    len(expanded_query_tokens), 1
-                )
+            coverage = lexical / max(len(expanded_query_tokens), 1) if expanded_query_tokens else 0.0
             title_tokens = self._tokenize(doc.title)
             title_overlap = len(query_tokens.intersection(title_tokens))
-            query_phrase = " ".join(query.lower().split())
             phrase_boost = 1.0 if query_phrase and query_phrase in f"{doc.title} {doc.summary}".lower() else 0.0
 
             recency = 0.0
