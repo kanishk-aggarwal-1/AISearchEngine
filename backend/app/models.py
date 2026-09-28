@@ -156,6 +156,12 @@ class BookmarkItem(BaseModel):
 _PASSWORD_RE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$")
 
 
+def _check_password_complexity(v: str) -> str:
+    if not _PASSWORD_RE.match(v):
+        raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
+    return v
+
+
 class AuthRegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
@@ -164,9 +170,7 @@ class AuthRegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def password_complexity(cls, v: str) -> str:
-        if not _PASSWORD_RE.match(v):
-            raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
-        return v
+        return _check_password_complexity(v)
 
 
 class AuthLoginRequest(BaseModel):
@@ -206,9 +210,7 @@ class PasswordResetConfirmRequest(BaseModel):
     @field_validator("new_password")
     @classmethod
     def password_complexity(cls, v: str) -> str:
-        if not _PASSWORD_RE.match(v):
-            raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
-        return v
+        return _check_password_complexity(v)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -218,9 +220,7 @@ class ChangePasswordRequest(BaseModel):
     @field_validator("new_password")
     @classmethod
     def new_password_complexity(cls, v: str) -> str:
-        if not _PASSWORD_RE.match(v):
-            raise ValueError("Password must contain at least one uppercase letter, one lowercase letter, and one digit")
-        return v
+        return _check_password_complexity(v)
 
 
 class UpdateAccountRequest(BaseModel):
