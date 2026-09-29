@@ -295,5 +295,32 @@ class TestRankChunks(unittest.TestCase):
         self.assertEqual(ranked[0].chunk_id, "a", "Chunk with lexical overlap should rank first")
 
 
+class TestEnrichmentTimeline(unittest.TestCase):
+    def test_timeline_sorts_mixed_naive_and_aware_datetimes(self):
+        from backend.app.services.enrichment_service import EnrichmentService
+
+        aware = SourceDoc(
+            title="arXiv paper",
+            summary="research",
+            url="http://arxiv.org/abs/1",
+            source="arXiv",
+            category="research",
+            published_at=datetime(2026, 9, 28, 16, 0, tzinfo=timezone.utc),
+        )
+        naive = SourceDoc(
+            title="Verge story",
+            summary="news",
+            url="https://theverge.com/1",
+            source="The Verge",
+            category="tech",
+            published_at=datetime(2026, 9, 28, 18, 0),
+        )
+
+        points = EnrichmentService().timeline([aware, naive])
+
+        self.assertEqual(len(points), 2)
+        self.assertEqual(points[0].event, "Verge story", "Most recent doc should sort first")
+
+
 if __name__ == "__main__":
     unittest.main()

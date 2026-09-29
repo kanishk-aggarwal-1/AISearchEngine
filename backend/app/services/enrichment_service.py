@@ -55,7 +55,12 @@ class EnrichmentService:
     def timeline(self, docs: List[SourceDoc], max_points: int = 8) -> List[TimelinePoint]:
         points: List[TimelinePoint] = []
         dated = [doc for doc in docs if doc.published_at]
-        dated.sort(key=lambda item: item.published_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        dated.sort(
+            key=lambda doc: (
+                doc.published_at if doc.published_at.tzinfo else doc.published_at.replace(tzinfo=timezone.utc)
+            ),
+            reverse=True,
+        )
 
         for doc in dated[:max_points]:
             points.append(

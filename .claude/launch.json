@@ -7,6 +7,12 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "frontend",
       "port": 3000
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set DATABASE_URL= && python -m uvicorn backend.app.main:app --reload --port 8000"],
+      "port": 8000
     }
   ]
 }

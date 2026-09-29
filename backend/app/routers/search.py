@@ -414,7 +414,12 @@ async def search_stream(request: Request, payload: SearchRequest) -> StreamingRe
 
     async def events():
         yield 'event: status\ndata: {"stage":"retrieving"}\n\n'
-        result = await _search_core(payload.model_copy(update={"user_id": user_id}), use_cache=True)
+        try:
+            result = await _search_core(payload.model_copy(update={"user_id": user_id}), use_cache=True)
+        except Exception as exc:
+            logger.exception("search_stream_failed error=%s", exc)
+            yield f"event: error\ndata: {json.dumps({'message': 'Search failed. Please try again.'})}\n\n"
+            return
         metadata = result.model_dump(mode="json")
         explanation = metadata.pop("explanation", "")
         yield f"event: result\ndata: {json.dumps(metadata)}\n\n"
