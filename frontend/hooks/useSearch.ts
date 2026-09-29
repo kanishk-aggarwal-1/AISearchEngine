@@ -182,7 +182,9 @@ export function useSearch(
             const eventName = frame.match(/^event:\s*(.+)$/m)?.[1];
             const data = frame.match(/^data:\s*(.+)$/m)?.[1];
             if (!data) continue;
-            if (eventName === "result") {
+            if (eventName === "error") {
+              throw new Error((JSON.parse(data) as { message?: string }).message || "Search failed");
+            } else if (eventName === "result") {
               streamed = { ...(JSON.parse(data) as SearchResponse), explanation: "" };
               setResult(streamed);
             } else if (eventName === "explanation" && streamed) {

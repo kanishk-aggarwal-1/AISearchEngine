@@ -6,17 +6,16 @@
 ```bash
 python -m pytest tests/ -q --tb=short
 ```
-99 tests, 12 skipped. The 12 skipped are PostgreSQL integration tests that require a
-real DB (`test_postgres_store.py`). They skip automatically when `DATABASE_URL` is absent.
-Always run the full suite before committing; it completes in ~50 s on a local machine.
+The skipped tests are PostgreSQL integration tests that require a real DB
+(`test_postgres_store.py`). They skip automatically when `DATABASE_URL` is absent.
+Always run the full suite before committing.
 
 ### Lint & format
 ```bash
 python -m ruff check backend/ scripts/ tests/      # lint
 python -m ruff format backend/ scripts/ tests/     # format
 ```
-Config is in `ruff.toml`. Rules: E, W, F, B. Line length 120.
-`E501` (line too long) and `B008` (Depends() in defaults) are suppressed.
+Config (rules, line length, suppressions) is in `ruff.toml`.
 
 ### Dead-code check
 ```bash
